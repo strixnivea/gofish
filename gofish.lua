@@ -142,9 +142,10 @@ local function get_current_date()
 
     -- Build the date information..
     vanadate.weekday        = (day % 8);
+	vanadate.hour           = math.floor(ts / 3600) % 24;
     vanadate.day            = (day % 30) + 1;
-    vanadate.month          = ((day % 360) / 30) + 1;
-    vanadate.year           = (day / 360);
+    vanadate.month          = math.floor((day % 360) / 30) + 1;
+    vanadate.year           = math.floor(day / 360);
     vanadate.moon_percent   = math.floor(mpercent + 0.5);
 
 	-- Calculate the Ashita Moon Phase
@@ -371,7 +372,12 @@ end
 function GetFishingArea(zoneID)
 	local bound_type;
 	local ret = { };
-	for _, v in pairs(GetAreasInZone(zoneID)) do
+	
+	-- Sort the areas in the zone by bound_type so that the default(0) comes last
+	local areaTable = GetAreasInZone(zoneID);
+	table.sort(areaTable, function(k1, k2) return k1.bound_type > k2.bound_type end );
+	
+	for _, v in ipairs(areaTable) do
 		bound_type = v["bound_type"];
 		if bound_type == 0 then
 			ret = v;
@@ -570,7 +576,7 @@ end
 --  ret: None
 ----------------------------------------------------------------------------------------------------
 function UpdateFisherman()
-	local fishingData = ashitaPlayer:GetCraftSkill(48);
+	local fishingData = ashitaPlayer:GetCraftSkill(0);
 	fisherman.skill = fishingData:GetSkill();
 
 	local index = ashitaParty:GetMemberTargetIndex(0);
@@ -648,7 +654,7 @@ function CalculateHookChance(fishingSkill, fish, bait, rod)
 	end
 
 	-- Rod size mismatch penalty
-	if not rod["legendary"] then
+	if rod["legendary"] ~= 1 then
 		if fish["fish_entry"]["size_type"] < rod["size_type"] then
 			hookChance = hookChance - math.clamp(3, 0, hookChance);
 		elseif fish["fish_entry"]["size_type"] > rod["size_type"] then
@@ -742,7 +748,7 @@ function FishingCheck(fishingSkill, rod, bait, area)
 	-- Add to the MobHookPool all mobs that are eligible to catch
 	-- TODO Implement NM and Quest mobs
 	for _, v in pairs(MobPool) do
-		if not v["nm"] and (v["areaid"] == 0 or v["areaid"] == area["areaid"]) then
+		if v["nm"] == 0 and (v["areaid"] == 0 or v["areaid"] == area["areaid"]) then
 			table.insert(MobHookPool, v);
 		end
 	end
@@ -831,6 +837,7 @@ ashita.events.register("d3d_present", "present_cb", function()
 	local posZ  = ashitaEntity:GetLocalPositionY(index); -- swapped with Y
 
 	if imgui.Begin("GoFishMainWindow", true) then
+		imgui.Text(string.format("Skill: %d", fisherman.skill));
 		imgui.Text(string.format("Zone: %s(%d)", fisherman.zone["name"], GetCurrentZoneId()));
 		imgui.Text(string.format("Area: %s(%d)", fisherman.area["name"], fisherman.area["areaid"]));
 		imgui.Text(string.format("Rod: %s(%d)", fisherman.rod["name"], fisherman.rodID));
@@ -838,6 +845,10 @@ ashita.events.register("d3d_present", "present_cb", function()
 		for _, entry in pairs(gui_variables.fishChances) do
 			imgui.Text (string.format("Chance: %.2f  Name: %s", entry[1], entry[2]));
 		end
+		imgui.Text(string.format("Chance: %.2f  Name: %s", gui_variables.itemChance, "Item"));
+		imgui.Text(string.format("Chance: %.2f  Name: %s", gui_variables.mobChance, "Mob"));
+		imgui.Text(string.format("Chance: %.2f  Name: %s", gui_variables.noChance, "No Catch"));
+		imgui.Text(string.format("h:%d p:%d m:%d", astrology.hour, astrology.phase, astrology.month));
 		imgui.Text(string.format("x:%.2f y:%.2f z:%.2f", posX, posY, posZ));
 		imgui.End();
 	end
