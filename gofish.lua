@@ -75,33 +75,33 @@ local weatherPtr  = ashita.memory.find('FFXiMain.dll', 0, '66A1????????663D????7
 ----------------------------------------------------------------------------------------------------
 astrology =
 {
-	ts = 0,
-	hour = 0,
-	phase = 0,
-	month = 0,
-	weather = 0
+    ts = 0,
+    hour = 0,
+    phase = 0,
+    month = 0,
+    weather = 0
 }
 
 fisherman =
 {
-	zoneID = 0,
-	rodID = 0,
-	baitID = 0,
-	rod = { },
-	bait = { },
-	zone = { },
-	area = { },
-	pos = { x=0, y=0, z=0 },
-	skill = 95
+    zoneID = 0,
+    rodID = 0,
+    baitID = 0,
+    rod = { },
+    bait = { },
+    zone = { },
+    area = { },
+    pos = { x=0, y=0, z=0 },
+    skill = 95
 }
 
 gui_variables =
 {
-	fishChance = 0,
-	itemChance = 0,
-	mobChance  = 0,
-	noChance   = 0,
-	fishChances = { }
+    fishChance = 0,
+    itemChance = 0,
+    mobChance  = 0,
+    noChance   = 0,
+    fishChances = { }
 }
 
 ----------------------------------------------------------------------------------------------------
@@ -118,8 +118,8 @@ end
 -- desc: Returns a table with the current Vana'diel date.
 ----------------------------------------------------------------------------------------------------
 local function get_current_date()
-	local vanadate = { };
-	
+    local vanadate = { };
+    
     local timestamp = get_raw_timestamp();
     local ts = (timestamp + 92514960) * 25;
     local day = math.floor(ts / 86400);
@@ -130,33 +130,33 @@ local function get_current_date()
     if (0 > mpercent) then
         mpercent = math.abs(mpercent);
     end
-	
-	-- Calculate the moon direction
-	if mphase == 42 or mphase == 0 then
-		vanadate.moon_direction = 0; -- None
-	elseif mphase < 42 then
-		vanadate.moon_direction = 1; -- Waning (decreasing)
-	else
-		vanadate.moon_direction = 2; -- Waxing (increasing)
-	end
+    
+    -- Calculate the moon direction
+    if mphase == 42 or mphase == 0 then
+        vanadate.moon_direction = 0; -- None
+    elseif mphase < 42 then
+        vanadate.moon_direction = 1; -- Waning (decreasing)
+    else
+        vanadate.moon_direction = 2; -- Waxing (increasing)
+    end
 
     -- Build the date information..
     vanadate.weekday        = (day % 8);
-	vanadate.hour           = math.floor(ts / 3600) % 24;
+    vanadate.hour           = math.floor(ts / 3600) % 24;
     vanadate.day            = (day % 30) + 1;
     vanadate.month          = math.floor((day % 360) / 30) + 1;
     vanadate.year           = math.floor(day / 360);
     vanadate.moon_percent   = math.floor(mpercent + 0.5);
 
-	-- Calculate the Ashita Moon Phase
+    -- Calculate the Ashita Moon Phase
     if (38 <= mphase) then  
         vanadate.ashita_moon_phase = math.floor((mphase - 38) / 7);
     else
         vanadate.ashita_moon_phase = math.floor((mphase + 46) / 7);
     end
-	
-	-- Convert to the Moon Phase that LSB uses for Fishing
-	vanadate.moon_phase = math.floor((vanadate.ashita_moon_phase+1)*21/32); -- Just happens to work
+    
+    -- Convert to the Moon Phase that LSB uses for Fishing
+    vanadate.moon_phase = math.floor((vanadate.ashita_moon_phase+1)*21/32); -- Just happens to work
 
     return vanadate;
 end
@@ -168,30 +168,58 @@ end
 function get_weather()
     local pointer = ashita.memory.read_uint32(weatherPtr);
     return ashita.memory.read_uint8(pointer);
-end 
+end
 
 ----------------------------------------------------------------------------------------------------
--- func: isInsideCylinder
--- desc: Helper function to calculate if a Player position is in the coordinates of a cylinder
---  ret: True or False
+-- func: onSegment
+-- desc: Checks if point q lies on line segment pr
+--  ret: True or False.
 ----------------------------------------------------------------------------------------------------
-function isInsideCylinder(area)
-	local pos = fisherman.pos;
-	local center = { x=area["center_x"], y=area["center_y"], z=area["center_z"] };
-	local radius = area["bound_radius"];
-	local height = area["bound_height"];
+function onSegment(p, q, r)
+    local t1 = (q.x <= math.max(p.x, r.x));
+    local t2 = (q.x >= math.min(p.x, r.x));
+    local t3 = (q.z <= math.max(p.z, r.z));
+    local t4 = (q.z <= math.min(p.z, r.z));
 
-	if pos.y < (center.y - (height / 2)) or pos.y > (center.y + (height/ 2 )) then return false; end
+    return t1 and t2 and t3 and t4;
+end
 
-	local dx = math.abs(pos.x - center.x);
-	if dx > radius then return false; end
+----------------------------------------------------------------------------------------------------
+-- func: orientation
+-- desc: Finds orientation of ordered point triplet
+--  ret: 0, 1, 2.
+----------------------------------------------------------------------------------------------------
+function orientation(p, q, r)
+    local val = (q.z - p.z) * (r.x - q.x) - (q.x - p.x) * (r.z - q.z);
+    local r_val = math.floor(val+0.5) -- Lua does not have a round()
 
-	local dz = math.abs(pos.z - center.z);
-	if dz > radius then return false; end
+    if r_val == 0 then
+        return 0;
+    elseif r_val > 0 then
+        return 1;
+    else
+        return 2;
+    end
+end
 
-	if dx + dz <= radius then return true; end
+----------------------------------------------------------------------------------------------------
+-- func: doIntersect
+-- desc: Checks if line segments p1q1 and p2q2 intersect
+--  ret: True or False.
+----------------------------------------------------------------------------------------------------
+function doIntersect(p1, q1, p2, q2)
+    local o1 = orientation(p1, q1, p2);
+    local o2 = orientation(p1, q1, q2);
+    local o3 = orientation(p2, q2, p1);
+    local o4 = orientation(p2, q2, q1);
 
-	return dx * dx + dz *dz <= radius * radius;
+    if o1 ~= o2 and o3 ~= o4              then return true; end
+    if o1 == 0  and onSegment(p1, p2, q1) then return true; end
+    if o2 == 0  and onSegment(p1, q2, q1) then return true; end
+    if o3 == 0  and onSegment(p2, p1, q2) then return true; end
+    if o4 == 0  and onSegment(p2, q1, q2) then return true; end
+
+    return false;
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -200,8 +228,58 @@ end
 --  ret: True or False
 ----------------------------------------------------------------------------------------------------
 function isInsidePoly(area)
-	-- TODO Figure out how to import bounds hex data from passed area
-	return false;
+    local p          = fisherman.pos;
+    local posy       = area["center_y"];
+    local height     = area["bound_height"];
+    local polygon    = area["bounds"];
+    local n          = table_count(area["bounds"]);
+    local MAX_POINTS = 10000;
+
+    -- Return early if the point doesn't satisfy the easiest test: the y position
+    if p.y < (posy - (height / 2)) or p.y > (posy + (height / 2)) then return false; end
+
+    -- Otherwise do the polygon math
+    local extreme = { x = MAX_POINTS, y = p.z, z = 0 };
+
+    local count = 0;
+    local i     = 0;
+
+    repeat
+        local next = (i+1) % n;
+        if doIntersect(polygon[i+1], polygon[next+1], p, extreme) then
+            if orientation(polygon[i+1], p, polygon[next+1]) == 0 then
+                return onSegment(polygon[i+1], p, polygon[next+1]);
+            end
+            count = count + 1;
+        end
+        i = next;
+    until i == 0;
+
+    return (count % 2) == 1;
+end
+
+----------------------------------------------------------------------------------------------------
+-- func: isInsideCylinder
+-- desc: Helper function to calculate if a Player position is in the coordinates of a cylinder
+--  ret: True or False
+----------------------------------------------------------------------------------------------------
+function isInsideCylinder(area)
+    local pos = fisherman.pos;
+    local center = { x=area["center_x"], y=area["center_y"], z=area["center_z"] };
+    local radius = area["bound_radius"];
+    local height = area["bound_height"];
+
+    if pos.y < (center.y - (height / 2)) or pos.y > (center.y + (height / 2)) then return false; end
+
+    local dx = math.abs(pos.x - center.x);
+    if dx > radius then return false; end
+
+    local dz = math.abs(pos.z - center.z);
+    if dz > radius then return false; end
+
+    if dx + dz <= radius then return true; end
+
+    return dx * dx + dz *dz <= radius * radius;
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -210,7 +288,7 @@ end
 --  ret: Numerical return of the specified pattern
 ----------------------------------------------------------------------------------------------------
 function COSPATTERN(x, A, B, C, D)
-	return math.clamp(A * math.cos(B*x+C) + D, 0.0, 1.0);
+    return math.clamp(A * math.cos(B*x+C) + D, 0.0, 1.0);
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -256,23 +334,23 @@ function MONTHPATTERN_10(x) return COSPATTERN(x, 0.50, 0.50,  0.53, 0.50); end
 --  ret: Modifier value between 0.25-1.25 from the selected hour pattern
 ----------------------------------------------------------------------------------------------------
 function GetHourlyModifier(fish)
-	local modifier = 0.5;
-	local hourPattern = fish["hour_pattern"];
-	local hour = astrology.hour;
+    local modifier = 0.5;
+    local hourPattern = fish["hour_pattern"];
+    local hour = astrology.hour;
 
-	if     hourPattern == 1 then modifier = HOURPATTERN_1(hour);
-	elseif hourPattern == 2 then
-		if hour ~= 5 and hour ~= 17 then modifier = 1.0 end
-	elseif hourPattern == 3 then
-		if hour == 5 and hour == 17 then modifier = 1.0 end
-	elseif hourPattern == 4 then
-		if hour > 19 or  hour <  4  then modifier = 1.0 end
-	elseif hourPattern == 5 then modifier = HOURPATTERN_2(hour);
-	elseif hourPattern == 6 then modifier = HOURPATTERN_3(hour);
-	elseif hourPattern == 7 then modifier = HOURPATTERN_4(hour);
-	end
+    if     hourPattern == 1 then modifier = HOURPATTERN_1(hour);
+    elseif hourPattern == 2 then
+        if hour ~= 5 and hour ~= 17 then modifier = 1.0 end
+    elseif hourPattern == 3 then
+        if hour == 5 and hour == 17 then modifier = 1.0 end
+    elseif hourPattern == 4 then
+        if hour > 19 or  hour <  4  then modifier = 1.0 end
+    elseif hourPattern == 5 then modifier = HOURPATTERN_2(hour);
+    elseif hourPattern == 6 then modifier = HOURPATTERN_3(hour);
+    elseif hourPattern == 7 then modifier = HOURPATTERN_4(hour);
+    end
 
-	return modifier + 0.25;
+    return modifier + 0.25;
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -281,18 +359,18 @@ end
 --  ret: Modifier value between 0.25-1.25 from the selected moon pattern
 ----------------------------------------------------------------------------------------------------
 function GetMoonModifier(fish)
-	local modifier = 1.0;
-	local moonPattern = fish["moon_pattern"]
-	local moonPhase = astrology.phase;
+    local modifier = 1.0;
+    local moonPattern = fish["moon_pattern"]
+    local moonPhase = astrology.phase;
 
-	if     moonPattern == 1 then modifier = MOONPATTERN_1(moonPhase);
-	elseif moonPattern == 2 then modifier = MOONPATTERN_2(moonPhase);
-	elseif moonPattern == 3 then modifier = MOONPATTERN_3(moonPhase);
-	elseif moonPattern == 4 then modifier = MOONPATTERN_4(moonPhase);
-	elseif moonPattern == 5 then modifier = MOONPATTERN_4(moonPhase); -- Not a typo
-	end
+    if     moonPattern == 1 then modifier = MOONPATTERN_1(moonPhase);
+    elseif moonPattern == 2 then modifier = MOONPATTERN_2(moonPhase);
+    elseif moonPattern == 3 then modifier = MOONPATTERN_3(moonPhase);
+    elseif moonPattern == 4 then modifier = MOONPATTERN_4(moonPhase);
+    elseif moonPattern == 5 then modifier = MOONPATTERN_4(moonPhase); -- Not a typo
+    end
 
-	return modifier + 0.25;
+    return modifier + 0.25;
 
 end
 
@@ -302,23 +380,23 @@ end
 --  ret: Modifier value between 0.25-1.25 from the selected month pattern
 ----------------------------------------------------------------------------------------------------
 function GetMonthlyTidalInfluence(fish)
-	local modifier = 0.5;
-	local monthPattern = fish["month_pattern"];
-	local month = astrology.month;
+    local modifier = 0.5;
+    local monthPattern = fish["month_pattern"];
+    local month = astrology.month;
 
-	if     monthPattern == 1 then modifier = MONTHPATTERN_1(month);
-	elseif monthPattern == 2 then modifier = MONTHPATTERN_2(month);
-	elseif monthPattern == 3 then modifier = MONTHPATTERN_3(month);
-	elseif monthPattern == 4 then modifier = MONTHPATTERN_4(month);
-	elseif monthPattern == 5 then modifier = MONTHPATTERN_5(month);
-	elseif monthPattern == 6 then modifier = MONTHPATTERN_6(month);
-	elseif monthPattern == 7 then modifier = MONTHPATTERN_7(month);
-	elseif monthPattern == 8 then modifier = MONTHPATTERN_8(month);
-	elseif monthPattern == 9 then modifier = MONTHPATTERN_9(month);
-	elseif monthPattern == 10 then modifier = MONTHPATTERN_10(month);
-	end
+    if     monthPattern == 1 then modifier = MONTHPATTERN_1(month);
+    elseif monthPattern == 2 then modifier = MONTHPATTERN_2(month);
+    elseif monthPattern == 3 then modifier = MONTHPATTERN_3(month);
+    elseif monthPattern == 4 then modifier = MONTHPATTERN_4(month);
+    elseif monthPattern == 5 then modifier = MONTHPATTERN_5(month);
+    elseif monthPattern == 6 then modifier = MONTHPATTERN_6(month);
+    elseif monthPattern == 7 then modifier = MONTHPATTERN_7(month);
+    elseif monthPattern == 8 then modifier = MONTHPATTERN_8(month);
+    elseif monthPattern == 9 then modifier = MONTHPATTERN_9(month);
+    elseif monthPattern == 10 then modifier = MONTHPATTERN_10(month);
+    end
 
-	return modifier + 0.25;
+    return modifier + 0.25;
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -327,14 +405,14 @@ end
 --  ret: Modifier value between 1.0-1.2
 ----------------------------------------------------------------------------------------------------
 function GetWeatherModifier()
-	local weather = astrology.weather;
-	local modifier = 1.0;
+    local weather = astrology.weather;
+    local modifier = 1.0;
 
-	if     weather == WEATHER.RAIN   then modifier = 1.1;
-	elseif weather == WEATHER.SQUALL then modifier = 1.2;
-	end
+    if     weather == WEATHER.RAIN   then modifier = 1.1;
+    elseif weather == WEATHER.SQUALL then modifier = 1.2;
+    end
 
-	return modifier;
+    return modifier;
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -352,7 +430,7 @@ end
 --  ret: Found fishing_zone entry
 ----------------------------------------------------------------------------------------------------
 function GetZoneInfo(zoneID)
-	return find_by_1(fishing_zone, test_by_1, "zoneid", zoneID);
+    return find_by_1(fishing_zone, test_by_1, "zoneid", zoneID);
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -361,7 +439,7 @@ end
 --  ret: Table of fishing_area entries
 ----------------------------------------------------------------------------------------------------
 function GetAreasInZone(zoneID)
-	return table_stripkeys(filter_by_1(fishing_area, test_by_1, "zoneid", zoneID));
+    return table_stripkeys(filter_by_1(fishing_area, test_by_1, "zoneid", zoneID));
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -370,31 +448,31 @@ end
 --  ret: Table of fishing_area entries
 ----------------------------------------------------------------------------------------------------
 function GetFishingArea(zoneID)
-	local bound_type;
-	local ret = { };
-	
-	-- Sort the areas in the zone by bound_type so that the default(0) comes last
-	local areaTable = GetAreasInZone(zoneID);
-	table.sort(areaTable, function(k1, k2) return k1.bound_type > k2.bound_type end );
-	
-	for _, v in ipairs(areaTable) do
-		bound_type = v["bound_type"];
-		if bound_type == 0 then
-			ret = v;
-			break;
-		elseif bound_type == 1 then
-			if isInsideCylinder(v) then
-				ret = v;
-				break;
-			end
-		elseif bound_type == 2 then
-			if isInsidePoly() then
-				ret = v;
-				break;
-			end
-		end
-	end
-	return ret;
+    local bound_type;
+    local ret = { };
+    
+    -- Sort the areas in the zone by bound_type so that the default(0) comes last
+    local areaTable = GetAreasInZone(zoneID);
+    table.sort(areaTable, function(k1, k2) return k1.bound_type > k2.bound_type end );
+    
+    for _, v in ipairs(areaTable) do
+        bound_type = v["bound_type"];
+        if bound_type == 0 then
+            ret = v;
+            break;
+        elseif bound_type == 1 then
+            if isInsideCylinder(v) then
+                ret = v;
+                break;
+            end
+        elseif bound_type == 2 then
+            if isInsidePoly(v) then
+                ret = v;
+                break;
+            end
+        end
+    end
+    return ret;
 end
 
 
@@ -404,7 +482,7 @@ end
 --  ret: fishing_fish db entry
 ----------------------------------------------------------------------------------------------------
 function GetFish(fishID)
-	return find_by_1(fishing_fish, test_by_1, "fishid", fishID);
+    return find_by_1(fishing_fish, test_by_1, "fishid", fishID);
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -413,7 +491,7 @@ end
 --  ret: fishing_rod db entry
 ----------------------------------------------------------------------------------------------------
 function GetRod(rodID)
-	return find_by_1(fishing_rod, test_by_1, "rodid", rodID);
+    return find_by_1(fishing_rod, test_by_1, "rodid", rodID);
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -422,7 +500,7 @@ end
 --  ret: fishing_bait db entry
 ----------------------------------------------------------------------------------------------------
 function GetBait(baitID)
-	return find_by_1(fishing_bait, test_by_1, "baitid", baitID);
+    return find_by_1(fishing_bait, test_by_1, "baitid", baitID);
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -431,16 +509,16 @@ end
 --  ret: A table of fishing_group and fishing_fish entry pairs
 ----------------------------------------------------------------------------------------------------
 function GetFishInGroup(groupID)
-	local pool = { }
-	local group_pool = filter_by_1(fishing_group, test_by_1, "groupid", groupID);
-	local fish;
-	for _, v in pairs(group_pool) do
-		fish = GetFish(v["fishid"]);
-		if fish["item"] == 0 then
-			table.insert(pool,{group_entry = v, fish_entry = fish});
-		end
-	end
-	return pool;
+    local pool = { }
+    local group_pool = filter_by_1(fishing_group, test_by_1, "groupid", groupID);
+    local fish;
+    for _, v in pairs(group_pool) do
+        fish = GetFish(v["fishid"]);
+        if fish["item"] == 0 then
+            table.insert(pool,{group_entry = v, fish_entry = fish});
+        end
+    end
+    return pool;
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -449,17 +527,17 @@ end
 --  ret: A table of fishing_group and fishing_fish entry pairs
 ----------------------------------------------------------------------------------------------------
 function GetItemsInGroup(groupID)
-	local pool = { }
-	local group_pool = filter_by_1(fishing_group, test_by_1, "groupid", groupID);
-	local fish;
-	for _, v in pairs(group_pool) do
-		fish = GetFish(v["fishid"]);
-		if fish["item"] == 1 then
-			-- Generate a new table to pair the fishing_group to the fishing_fish
-			table.insert(pool,{group_entry = v, fish_entry = fish});
-		end
-	end
-	return pool;
+    local pool = { }
+    local group_pool = filter_by_1(fishing_group, test_by_1, "groupid", groupID);
+    local fish;
+    for _, v in pairs(group_pool) do
+        fish = GetFish(v["fishid"]);
+        if fish["item"] == 1 then
+            -- Generate a new table to pair the fishing_group to the fishing_fish
+            table.insert(pool,{group_entry = v, fish_entry = fish});
+        end
+    end
+    return pool;
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -468,7 +546,7 @@ end
 --  ret: A table of fishing_mob entries
 ----------------------------------------------------------------------------------------------------
 function GetMobsInZone(zoneID)
-	return filter_by_1(fishing_mob, test_by_1, "zoneid", zoneID);
+    return filter_by_1(fishing_mob, test_by_1, "zoneid", zoneID);
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -477,7 +555,7 @@ end
 --  ret: Numerical value of groupid
 ----------------------------------------------------------------------------------------------------
 function GetCatchGroupID(zoneID, areaID)
-	return find_by_2(fishing_catch, test_by_2, "zoneid", "areaid", zoneID, areaID)["groupid"];
+    return find_by_2(fishing_catch, test_by_2, "zoneid", "areaid", zoneID, areaID)["groupid"];
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -486,7 +564,7 @@ end
 --  ret: Numerical value of groupid
 ----------------------------------------------------------------------------------------------------
 function isBaitValid(fishID, baitID)
-	return exists_by_2(fishing_bait_affinity, test_by_2, "fishid", "baitid", fishID, baitID);
+    return exists_by_2(fishing_bait_affinity, test_by_2, "fishid", "baitid", fishID, baitID);
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -495,7 +573,7 @@ end
 --  ret: Numerical value of bait power
 ----------------------------------------------------------------------------------------------------
 function GetBaitPower(fishID, baitID)
-	return find_by_2(fishing_bait_affinity, test_by_2, "fishid", "baitid", fishID, baitID)["power"];
+    return find_by_2(fishing_bait_affinity, test_by_2, "fishid", "baitid", fishID, baitID)["power"];
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -505,18 +583,18 @@ end
 --  ret: Table of fishing_fish db entries
 ----------------------------------------------------------------------------------------------------
 function GetFishPool(zoneID, areaID, baitID)
-	local pool = { };
-	local groupID = GetCatchGroupID(zoneID, areaID);
-	local group_pool = GetFishInGroup(groupID);
+    local pool = { };
+    local groupID = GetCatchGroupID(zoneID, areaID);
+    local group_pool = GetFishInGroup(groupID);
 
-	-- Check if bait is valid and make new table
-	for _, v in pairs(group_pool) do
-		if isBaitValid(v["group_entry"]["fishid"], baitID) then
-			table.insert(pool,v);
-		end
-	end
+    -- Check if bait is valid and make new table
+    for _, v in pairs(group_pool) do
+        if isBaitValid(v["group_entry"]["fishid"], baitID) then
+            table.insert(pool,v);
+        end
+    end
 
-	return pool
+    return pool
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -525,8 +603,8 @@ end
 --  ret: Table of fishing_fish db entries
 ----------------------------------------------------------------------------------------------------
 function GetItemPool(zoneID, areaID)
-	local groupID = GetCatchGroupID(zoneID, areaID);
-	return table_stripkeys(GetItemsInGroup(groupID));
+    local groupID = GetCatchGroupID(zoneID, areaID);
+    return table_stripkeys(GetItemsInGroup(groupID));
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -535,7 +613,7 @@ end
 --  ret: Table of fishing_mob db entries
 ----------------------------------------------------------------------------------------------------
 function GetMobPool(zoneID)
-	return table_stripkeys(GetMobsInZone(zoneID));
+    return table_stripkeys(GetMobsInZone(zoneID));
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -544,7 +622,7 @@ end
 --  ret: Enum value of moon phase
 ----------------------------------------------------------------------------------------------------
 function GetAshitaMoonPhase()
-	return get_current_date().ashita_moon_phase; --APICALL
+    return get_current_date().ashita_moon_phase; --APICALL
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -553,7 +631,7 @@ end
 --  ret: Enum value of moon phase
 ----------------------------------------------------------------------------------------------------
 function GetMoonPhase()
-	return get_current_date().moon_phase;
+    return get_current_date().moon_phase;
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -562,12 +640,12 @@ end
 --  ret: Enum value of moon phase
 ----------------------------------------------------------------------------------------------------
 function GetItemInEquipSlot(slot)
-	local item = ashitaInventory:GetEquippedItem(slot); -- get the equipment_t
-	if item then
-		local iitem = ashitaInventory:GetContainerItem(bit.band(item.Index, 0xFF00) / 0x0100, item.Index % 0x0100);
-		return iitem.Id;
-	end
-	return nil; -- Default/Error
+    local item = ashitaInventory:GetEquippedItem(slot); -- get the equipment_t
+    if item then
+        local iitem = ashitaInventory:GetContainerItem(bit.band(item.Index, 0xFF00) / 0x0100, item.Index % 0x0100);
+        return iitem.Id;
+    end
+    return nil; -- Default/Error
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -576,22 +654,22 @@ end
 --  ret: None
 ----------------------------------------------------------------------------------------------------
 function UpdateFisherman()
-	local fishingData = ashitaPlayer:GetCraftSkill(0);
-	fisherman.skill = fishingData:GetSkill();
+    local fishingData = ashitaPlayer:GetCraftSkill(0);
+    fisherman.skill = fishingData:GetSkill();
 
-	local index = ashitaParty:GetMemberTargetIndex(0);
+    local index = ashitaParty:GetMemberTargetIndex(0);
     local posX  = ashitaEntity:GetLocalPositionX(index);
     local posY  = ashitaEntity:GetLocalPositionZ(index); -- swapped with Z
-	local posZ  = ashitaEntity:GetLocalPositionY(index); -- swapped with Y
-	fisherman.pos = { x = posX, y = posY, z = posZ };
+    local posZ  = ashitaEntity:GetLocalPositionY(index); -- swapped with Y
+    fisherman.pos = { x = posX, y = posY, z = posZ };
 
-	fisherman.zoneID = GetCurrentZoneId() --Calls ashitaParty:GetMemberZone(0)
-	fisherman.rodID  = GetItemInEquipSlot(EQUIPMENTSLOTS.RANGE);
-	fisherman.baitID = GetItemInEquipSlot(EQUIPMENTSLOTS.AMMO);
+    fisherman.zoneID = GetCurrentZoneId() --Calls ashitaParty:GetMemberZone(0)
+    fisherman.rodID  = GetItemInEquipSlot(EQUIPMENTSLOTS.RANGE);
+    fisherman.baitID = GetItemInEquipSlot(EQUIPMENTSLOTS.AMMO);
 
-	fisherman.area = GetFishingArea(fisherman.zoneID);
-	fisherman.rod  = GetRod(fisherman.rodID);
-	fisherman.bait = GetBait(fisherman.baitID);
+    fisherman.area = GetFishingArea(fisherman.zoneID);
+    fisherman.rod  = GetRod(fisherman.rodID);
+    fisherman.bait = GetBait(fisherman.baitID);
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -600,11 +678,11 @@ end
 --  ret: None
 ----------------------------------------------------------------------------------------------------
 function UpdateAstrology()
-	astrology.ts      = get_raw_timestamp();
-	astrology.hour    = get_current_date().hour;
-	astrology.phase   = get_current_date().moon_phase;
-	astrology.month   = get_current_date().month;
-	astrology.weather = get_weather();
+    astrology.ts      = get_raw_timestamp();
+    astrology.hour    = get_current_date().hour;
+    astrology.phase   = get_current_date().moon_phase;
+    astrology.month   = get_current_date().month;
+    astrology.weather = get_weather();
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -613,65 +691,65 @@ end
 --  ret: A weighted value ranged between 0-120
 ----------------------------------------------------------------------------------------------------
 function CalculateHookChance(fishingSkill, fish, bait, rod)
-	local monthModifier = GetMonthlyTidalInfluence(fish);
-	local hourModifier  = GetHourlyModifier(fish) * 2;
-	local moonModifier  = GetMoonModifier(fish) * 3;
-	local modifier      = math.max(0, (moonModifier + hourModifier + monthModifier) / 3);
-	local hookChance    = math.floor(25*modifier);
+    local monthModifier = GetMonthlyTidalInfluence(fish);
+    local hourModifier  = GetHourlyModifier(fish) * 2;
+    local moonModifier  = GetMoonModifier(fish) * 3;
+    local modifier      = math.max(0, (moonModifier + hourModifier + monthModifier) / 3);
+    local hookChance    = math.floor(25*modifier);
 
-	-- Adjust for the fish/bait affinity
-	local baitPower = GetBaitPower(fish["fish_entry"]["fishid"],bait["baitid"]);
-	if baitPower == 1 then
-		if bait["type"] == FISHINGBAITTYPE.LURE then
-			hookChance = hookChance + 30;
-		else
-			hookChance = hookChance + 35;
-		end
-	elseif baitPower == 2 then
-		if bait["type"] == FISHINGBAITTYPE.LURE then
-			hookChance = hookChance + 60;
-		else
-			hookChance = hookChance + 65;
-		end
-	elseif baitPower == 3 then
-		if bait["type"] == FISHINGBAITTYPE.LURE then
-			hookChance = hookChance + 75;
-		else
-			hookChance = hookChance + 80;
-		end
-	else
-		hookChance = 0; -- Added to catch errors if somehow the isBaitValid filter didn't work
-	end
+    -- Adjust for the fish/bait affinity
+    local baitPower = GetBaitPower(fish["fish_entry"]["fishid"],bait["baitid"]);
+    if baitPower == 1 then
+        if bait["type"] == FISHINGBAITTYPE.LURE then
+            hookChance = hookChance + 30;
+        else
+            hookChance = hookChance + 35;
+        end
+    elseif baitPower == 2 then
+        if bait["type"] == FISHINGBAITTYPE.LURE then
+            hookChance = hookChance + 60;
+        else
+            hookChance = hookChance + 65;
+        end
+    elseif baitPower == 3 then
+        if bait["type"] == FISHINGBAITTYPE.LURE then
+            hookChance = hookChance + 75;
+        else
+            hookChance = hookChance + 80;
+        end
+    else
+        hookChance = 0; -- Added to catch errors if somehow the isBaitValid filter didn't work
+    end
 
-	-- Level too low Penalty
-	if fish["fish_entry"]["skill_level"] > fishingSkill then
-		hookChance = hookChance - math.clamp(math.floor((fish["fish_entry"]["skill_level"]-fishingSkill) * 0.25), 0, hookChance);
-	end
+    -- Level too low Penalty
+    if fish["fish_entry"]["skill_level"] > fishingSkill then
+        hookChance = hookChance - math.clamp(math.floor((fish["fish_entry"]["skill_level"]-fishingSkill) * 0.25), 0, hookChance);
+    end
 
-	-- Level too high Penalty
-	if fishingSkill - 10 > fish["fish_entry"]["skill_level"] then
-		hookChance = hookChance - math.clamp(math.floor((fishingSkill - 10 - fish["fish_entry"]["skill_level"]) * 0.15), 0, hookChance);
-	end
+    -- Level too high Penalty
+    if fishingSkill - 10 > fish["fish_entry"]["skill_level"] then
+        hookChance = hookChance - math.clamp(math.floor((fishingSkill - 10 - fish["fish_entry"]["skill_level"]) * 0.15), 0, hookChance);
+    end
 
-	-- Rod size mismatch penalty
-	if rod["legendary"] ~= 1 then
-		if fish["fish_entry"]["size_type"] < rod["size_type"] then
-			hookChance = hookChance - math.clamp(3, 0, hookChance);
-		elseif fish["fish_entry"]["size_type"] > rod["size_type"] then
-			hookChance = hookChance - math.clamp(5, 0, hookChance);
-		end
-	end
+    -- Rod size mismatch penalty
+    if rod["legendary"] ~= 1 then
+        if fish["fish_entry"]["size_type"] < rod["size_type"] then
+            hookChance = hookChance - math.clamp(3, 0, hookChance);
+        elseif fish["fish_entry"]["size_type"] > rod["size_type"] then
+            hookChance = hookChance - math.clamp(5, 0, hookChance);
+        end
+    end
 
-	-- TODO Shellfish Affinity
+    -- TODO Shellfish Affinity
 
-	-- Adjustment for fish rarity
-	local multiplier;
-	if fish["group_entry"]["rarity"] < 1000 then
-		multiplier = fish["group_entry"]["rarity"] / 1000;
-		hookChance = math.floor(hookChance * multiplier);
-	end
+    -- Adjustment for fish rarity
+    local multiplier;
+    if fish["group_entry"]["rarity"] < 1000 then
+        multiplier = fish["group_entry"]["rarity"] / 1000;
+        hookChance = math.floor(hookChance * multiplier);
+    end
 
-	return math.clamp(hookChance, 20, 120);
+    return math.clamp(hookChance, 20, 120);
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -681,136 +759,136 @@ end
 --  ret: That's a good question...
 ----------------------------------------------------------------------------------------------------
 function FishingCheck(fishingSkill, rod, bait, area)
-	local FishPoolWeight = 0;
-	local ItemPoolWeight = 0;
-	local MobPoolWeight = 0;
-	local NoCatchWeight = 0;
+    local FishPoolWeight = 0;
+    local ItemPoolWeight = 0;
+    local MobPoolWeight = 0;
+    local NoCatchWeight = 0;
 
-	local mphase = astrology.phase;
-	local fishPoolMoonModifier = MOONPATTERN_4(mphase);
-	local itemPoolMoonModifier = MOONPATTERN_2(mphase);
-	local mobPoolMoonModifier  = MOONPATTERN_3(mphase);
-	local noCatchMoonModifier  = MOONPATTERN_5(mphase);
+    local mphase = astrology.phase;
+    local fishPoolMoonModifier = MOONPATTERN_4(mphase);
+    local itemPoolMoonModifier = MOONPATTERN_2(mphase);
+    local mobPoolMoonModifier  = MOONPATTERN_3(mphase);
+    local noCatchMoonModifier  = MOONPATTERN_5(mphase);
 
-	local CZoneID   = fisherman.zoneID;
-	local CZoneInfo = GetZoneInfo(CZoneID);
-	fisherman.zone  = CZoneInfo
+    local CZoneID   = fisherman.zoneID;
+    local CZoneInfo = GetZoneInfo(CZoneID);
+    fisherman.zone  = CZoneInfo
 
-	-- Adjust weights by whether or not the player is in a city
-	if CZoneInfo["type"] % 2 == 1 then
-		FishPoolWeight =      math.floor(15*fishPoolMoonModifier);
-		ItemPoolWeight = 25 + math.floor(20*itemPoolMoonModifier);
-		MobPoolWeight  = 0;
-		NoCatchWeight  = 30 + math.floor(15*noCatchMoonModifier);
-	else
-		FishPoolWeight =      math.floor(25*fishPoolMoonModifier);
-		ItemPoolWeight = 10 + math.floor(15*itemPoolMoonModifier);
-		MobPoolWeight  = 15 + math.floor(15*mobPoolMoonModifier);
-		NoCatchWeight  = 15 + math.floor(20*noCatchMoonModifier);
-	end
+    -- Adjust weights by whether or not the player is in a city
+    if CZoneInfo["type"] % 2 == 1 then
+        FishPoolWeight =      math.floor(15*fishPoolMoonModifier);
+        ItemPoolWeight = 25 + math.floor(20*itemPoolMoonModifier);
+        MobPoolWeight  = 0;
+        NoCatchWeight  = 30 + math.floor(15*noCatchMoonModifier);
+    else
+        FishPoolWeight =      math.floor(25*fishPoolMoonModifier);
+        ItemPoolWeight = 10 + math.floor(15*itemPoolMoonModifier);
+        MobPoolWeight  = 15 + math.floor(15*mobPoolMoonModifier);
+        NoCatchWeight  = 15 + math.floor(20*noCatchMoonModifier);
+    end
 
-	local FishHookChanceTotal = 0;
-	local ItemHookChanceTotal = 0;
+    local FishHookChanceTotal = 0;
+    local ItemHookChanceTotal = 0;
 
-	local FishHookPool = { };
-	local ItemHookPool = { };
-	local MobHookPool  = { };
+    local FishHookPool = { };
+    local ItemHookPool = { };
+    local MobHookPool  = { };
 
-	-- Populate the pools based on all possibilities in that zone
-	local FishPool = GetFishPool(CZoneID, area["areaid"], bait["baitid"]);
-	local ItemPool = GetItemPool(CZoneID, area["areaid"]);
-	local MobPool  = GetMobPool(CZoneID);
+    -- Populate the pools based on all possibilities in that zone
+    local FishPool = GetFishPool(CZoneID, area["areaid"], bait["baitid"]);
+    local ItemPool = GetItemPool(CZoneID, area["areaid"]);
+    local MobPool  = GetMobPool(CZoneID);
 
-	-- Add to the FishHookPool all fish that are eligible to catch and their weighted chance
-	local hookChance;
-	local maxChance = 0;
-	for _, v in pairs(FishPool) do
-		if fishingSkill >= v["fish_entry"]["skill_level"] or v["fish_entry"]["skill_level"] - fishingSkill <= 100 then
-			hookChance = CalculateHookChance(fishingSkill, v, bait, rod);
-			-- Attach the calculated hook chance to the fetched entries
-			table.insert(FishHookPool, {chance = hookChance, fish = v["fish_entry"], group = v["group_entry"]});
-			FishHookChanceTotal = FishHookChanceTotal + hookChance;
-			if hookChance > maxChance then
-				maxChance = hookChance;
-			end
-		end
-	end
-	FishPoolWeight = math.clamp(FishPoolWeight + maxChance, 20, 120); -- Only increase the FishPoolWeight by chance of most likely fish
+    -- Add to the FishHookPool all fish that are eligible to catch and their weighted chance
+    local hookChance;
+    local maxChance = 0;
+    for _, v in pairs(FishPool) do
+        if fishingSkill >= v["fish_entry"]["skill_level"] or v["fish_entry"]["skill_level"] - fishingSkill <= 100 then
+            hookChance = CalculateHookChance(fishingSkill, v, bait, rod);
+            -- Attach the calculated hook chance to the fetched entries
+            table.insert(FishHookPool, {chance = hookChance, fish = v["fish_entry"], group = v["group_entry"]});
+            FishHookChanceTotal = FishHookChanceTotal + hookChance;
+            if hookChance > maxChance then
+                maxChance = hookChance;
+            end
+        end
+    end
+    FishPoolWeight = math.clamp(FishPoolWeight + maxChance, 20, 120); -- Only increase the FishPoolWeight by chance of most likely fish
 
-	-- Add to the ItemHookPool all items that are eligible to catch
-	-- TODO Implement full code for ItemHookPool, but for now, just filter out quest items
-	for _, v in pairs(ItemPool) do
-		if v["fish_entry"]["quest"] == 255 and v["fish_entry"]["log"] == 255 then
-			table.insert(ItemHookPool, v["fish_entry"])
-		end
-	end
+    -- Add to the ItemHookPool all items that are eligible to catch
+    -- TODO Implement full code for ItemHookPool, but for now, just filter out quest items
+    for _, v in pairs(ItemPool) do
+        if v["fish_entry"]["quest"] == 255 and v["fish_entry"]["log"] == 255 then
+            table.insert(ItemHookPool, v["fish_entry"])
+        end
+    end
 
-	-- Add to the MobHookPool all mobs that are eligible to catch
-	-- TODO Implement NM and Quest mobs
-	for _, v in pairs(MobPool) do
-		if v["nm"] == 0 and (v["areaid"] == 0 or v["areaid"] == area["areaid"]) then
-			table.insert(MobHookPool, v);
-		end
-	end
+    -- Add to the MobHookPool all mobs that are eligible to catch
+    -- TODO Implement NM and Quest mobs
+    for _, v in pairs(MobPool) do
+        if v["nm"] == 0 and (v["areaid"] == 0 or v["areaid"] == area["areaid"]) then
+            table.insert(MobHookPool, v);
+        end
+    end
 
-	-- Adjust the FishPoolWeight for if the weather is rain or a squall
-	FishPoolWeight = math.floor(FishPoolWeight * GetWeatherModifier());
+    -- Adjust the FishPoolWeight for if the weather is rain or a squall
+    FishPoolWeight = math.floor(FishPoolWeight * GetWeatherModifier());
 
-	-- Adjust the NoCatchWeight by the difficulty of the current zone
-	if CZoneInfo["difficulty"] > 0 then
-		NoCatchWeight = NoCatchWeight + CZoneInfo["difficulty"] * 25; --Assume average of 20 and 30
-	end
+    -- Adjust the NoCatchWeight by the difficulty of the current zone
+    if CZoneInfo["difficulty"] > 0 then
+        NoCatchWeight = NoCatchWeight + CZoneInfo["difficulty"] * 25; --Assume average of 20 and 30
+    end
 
-	-- TODO Fishing Apron Adjustment
+    -- TODO Fishing Apron Adjustment
 
-	-- TODO Poor Fish Bait Flag Adjustment
+    -- TODO Poor Fish Bait Flag Adjustment
 
-	-- If there are no fish that could be hooked, adjust the weights
-	if table_count(FishHookPool) > 0 then
-		-- TODO Lu Shang and Ebisu adjustments to FishPoolWeight
-	else
-		NoCatchWeight = math.floor(NoCatchWeight + FishPoolWeight/2);
-		FishPoolWeight = 0;
-	end
+    -- If there are no fish that could be hooked, adjust the weights
+    if table_count(FishHookPool) > 0 then
+        -- TODO Lu Shang and Ebisu adjustments to FishPoolWeight
+    else
+        NoCatchWeight = math.floor(NoCatchWeight + FishPoolWeight/2);
+        FishPoolWeight = 0;
+    end
 
-	-- If there are no items that could be hooked, adjust the weights
-	if table_count(ItemHookPool) == 0 then
-		NoCatchWeight = math.floor(NoCatchWeight + ItemPoolWeight/2);
-		ItemPoolWeight = 0;
-	end
+    -- If there are no items that could be hooked, adjust the weights
+    if table_count(ItemHookPool) == 0 then
+        NoCatchWeight = math.floor(NoCatchWeight + ItemPoolWeight/2);
+        ItemPoolWeight = 0;
+    end
 
-	-- If there are no mobs that could be hooked, adjust the weights
-	if table_count(MobHookPool) == 0 then
-		NoCatchWeight = math.floor(NoCatchWeight + MobPoolWeight/2);
-		MobPoolWeight = 0;
-	end
+    -- If there are no mobs that could be hooked, adjust the weights
+    if table_count(MobHookPool) == 0 then
+        NoCatchWeight = math.floor(NoCatchWeight + MobPoolWeight/2);
+        MobPoolWeight = 0;
+    end
 
-	-- If you are just wasting your time, adjust the weights
-	if FishPoolWeight == 0 and ItemPoolWeight == 0 and MobPoolWeight == 0 then
-		NoCatchWeight = 1000;
-	end
+    -- If you are just wasting your time, adjust the weights
+    if FishPoolWeight == 0 and ItemPoolWeight == 0 and MobPoolWeight == 0 then
+        NoCatchWeight = 1000;
+    end
 
-	-- Total up the weights and find the percent chance for each catch type
-	local totalWeight = FishPoolWeight + ItemPoolWeight + MobPoolWeight + NoCatchWeight;
-	local fishChance  = FishPoolWeight / totalWeight;
-	local itemChance  = ItemPoolWeight / totalWeight;
-	local mobChance   = MobPoolWeight  / totalWeight;
-	local noChance    = NoCatchWeight  / totalWeight;
+    -- Total up the weights and find the percent chance for each catch type
+    local totalWeight = FishPoolWeight + ItemPoolWeight + MobPoolWeight + NoCatchWeight;
+    local fishChance  = FishPoolWeight / totalWeight;
+    local itemChance  = ItemPoolWeight / totalWeight;
+    local mobChance   = MobPoolWeight  / totalWeight;
+    local noChance    = NoCatchWeight  / totalWeight;
 
-	gui_variables.fishChance = fishChance * 100;
-	gui_variables.itemChance = itemChance * 100;
-	gui_variables.mobChance  = mobChance  * 100;
-	gui_variables.noChance   = noChance   * 100;
+    gui_variables.fishChance = fishChance * 100;
+    gui_variables.itemChance = itemChance * 100;
+    gui_variables.mobChance  = mobChance  * 100;
+    gui_variables.noChance   = noChance   * 100;
 
-	local chance, fish_name, pool_size, restock_rate;
-	gui_variables.fishChances = { };
-	for _, entry in pairs(FishHookPool) do
-		chance = entry["chance"] / FishHookChanceTotal * gui_variables.fishChance;
-		fish_name  = entry["fish"].name;
-		pool_size = entry["group"].pool_size;
-		restock_rate = entry["group"].restock_rate;
-		table.insert(gui_variables.fishChances, { chance, fish_name, pool_size, restock_rate });
-	end
+    local chance, fish_name, pool_size, restock_rate;
+    gui_variables.fishChances = { };
+    for _, entry in pairs(FishHookPool) do
+        chance = entry["chance"] / FishHookChanceTotal * gui_variables.fishChance;
+        fish_name  = entry["fish"].name;
+        pool_size = entry["group"].pool_size;
+        restock_rate = entry["group"].restock_rate;
+        table.insert(gui_variables.fishChances, { chance, fish_name, pool_size, restock_rate });
+    end
 end
 
 ----------------------------------------------------------------------------------------------------s
@@ -818,9 +896,9 @@ end
 -- desc: Event called when the addon is being loaded.
 ----------------------------------------------------------------------------------------------------
 ashita.events.register("load", "load_cb", function ()
-	UpdateFisherman();
-	UpdateAstrology();
-	FishingCheck(fisherman.skill, fisherman.rod, fisherman.bait, fisherman.area);
+    UpdateFisherman();
+    UpdateAstrology();
+    FishingCheck(fisherman.skill, fisherman.rod, fisherman.bait, fisherman.area);
 end);
 
 ----------------------------------------------------------------------------------------------------
@@ -828,28 +906,36 @@ end);
 -- desc: Hook up to the Ashita render tick
 ----------------------------------------------------------------------------------------------------
 ashita.events.register("d3d_present", "present_cb", function()
-	imgui.SetNextWindowSize(default_config.window.dimensions, ImGuiCond_FirstUseEver);
-	imgui.SetNextWindowPos(default_config.window.position, ImGuiCond_FirstUseEver);
-	
-	index = ashitaParty:GetMemberTargetIndex(0);
+    imgui.SetNextWindowSize(default_config.window.dimensions, ImGuiCond_FirstUseEver);
+    imgui.SetNextWindowPos(default_config.window.position, ImGuiCond_FirstUseEver);
+    
+    index = ashitaParty:GetMemberTargetIndex(0);
     local posX  = ashitaEntity:GetLocalPositionX(index);
     local posY  = ashitaEntity:GetLocalPositionZ(index); -- swapped with Z
-	local posZ  = ashitaEntity:GetLocalPositionY(index); -- swapped with Y
+    local posZ  = ashitaEntity:GetLocalPositionY(index); -- swapped with Y
+    
+    local foundArea = fisherman.area["areaid"] ~= nil;
 
-	if imgui.Begin("GoFishMainWindow", true) then
-		imgui.Text(string.format("Skill: %d", fisherman.skill));
-		imgui.Text(string.format("Zone: %s(%d)", fisherman.zone["name"], GetCurrentZoneId()));
-		imgui.Text(string.format("Area: %s(%d)", fisherman.area["name"], fisherman.area["areaid"]));
-		imgui.Text(string.format("Rod: %s(%d)", fisherman.rod["name"], fisherman.rodID));
-		imgui.Text(string.format("Bait: %s(%d)", fisherman.bait["name"], fisherman.baitID));
-		for _, entry in pairs(gui_variables.fishChances) do
-			imgui.Text (string.format("Chance: %.2f  Name: %s", entry[1], entry[2]));
-		end
-		imgui.Text(string.format("Chance: %.2f  Name: %s", gui_variables.itemChance, "Item"));
-		imgui.Text(string.format("Chance: %.2f  Name: %s", gui_variables.mobChance, "Mob"));
-		imgui.Text(string.format("Chance: %.2f  Name: %s", gui_variables.noChance, "No Catch"));
-		imgui.Text(string.format("h:%d p:%d m:%d", astrology.hour, astrology.phase, astrology.month));
-		imgui.Text(string.format("x:%.2f y:%.2f z:%.2f", posX, posY, posZ));
-		imgui.End();
-	end
+    if imgui.Begin("GoFishMainWindow", true) then
+        imgui.Text(string.format("Skill: %d", fisherman.skill));
+        imgui.Text(string.format("Zone: %s(%d)", fisherman.zone["name"], GetCurrentZoneId()));
+        if foundArea then
+            imgui.Text(string.format("Area: %s(%d)", fisherman.area["name"], fisherman.area["areaid"]));
+        else
+            imgui.Text("Area: None");
+        end
+        imgui.Text(string.format("Rod: %s(%d)", fisherman.rod["name"], fisherman.rodID));
+        imgui.Text(string.format("Bait: %s(%d)", fisherman.bait["name"], fisherman.baitID));
+        if foundArea then
+            for _, entry in pairs(gui_variables.fishChances) do
+                imgui.Text (string.format("Chance: %.2f  Name: %s", entry[1], entry[2]));
+            end
+            imgui.Text(string.format("Chance: %.2f  Name: %s", gui_variables.itemChance, "Item"));
+            imgui.Text(string.format("Chance: %.2f  Name: %s", gui_variables.mobChance, "Mob"));
+            imgui.Text(string.format("Chance: %.2f  Name: %s", gui_variables.noChance, "No Catch"));
+        end
+        imgui.Text(string.format("h:%d p:%d m:%d", astrology.hour, astrology.phase, astrology.month));
+        imgui.Text(string.format("x:%.2f y:%.2f z:%.2f", posX, posY, posZ));
+        imgui.End();
+    end
 end);
