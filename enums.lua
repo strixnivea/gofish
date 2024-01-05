@@ -18,9 +18,9 @@ MOONPHASE =
 
 FISHINGBAITTYPE =
 {
-    BAIT   = 0,
-    LURE   = 1,
-    SPECIAL =2
+    BAIT    = 0,
+    LURE    = 1,
+    SPECIAL = 2
 }
 
 CONTAINERS =
@@ -58,14 +58,25 @@ EQUIPMENTSLOTS =
 
 WEEKDAY =
 {
-    FIRESDAY = 0,
-    EARTHSDAY = 1,
-    WATERSDAY = 2,
-    WINDSDAY = 3,
-    ICEDAY = 4,
+    FIRESDAY     = 0,
+    EARTHSDAY    = 1,
+    WATERSDAY    = 2,
+    WINDSDAY     = 3,
+    ICEDAY       = 4,
     LIGHTNINGDAY = 5,
-    LIGHTSDAY = 6,
-    DARKSDAY = 7
+    LIGHTSDAY    = 6,
+    DARKSDAY     = 7
+}
+
+EVENTS =
+{
+    FISHING_OUT  = 0x01A,
+    ZONEIN_IN    = 0x00A,
+    ZONEOUT_IN   = 0x00B,
+	EQUIPCHG_OUT = 0x050,
+	EQUIPCHG_IN  = 0x051,
+	ZONEDONE_IN  = 0x112,
+    INVREADY_IN  = 0x01D
 }
 
 return {
@@ -74,5 +85,6 @@ return {
     FISHINGBAITTYPE = FISHINGBAITTYPE,
     CONTAINERS      = CONTAINERS,
     EQUIPMENTSLOTS  = EQUIPMENTSLOTS,
-    WEEKDAY         = WEEKDAY
+    WEEKDAY         = WEEKDAY,
+    EVENTS          = EVENTS
 }

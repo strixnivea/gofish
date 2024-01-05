@@ -48,9 +48,9 @@ local default_config =
 {
     window =
     {
-        position    = {  40,  40 },
-        dimensions  = { 400, 400},
-        visible   = true,
+        position   = {  40,  40 },
+        dimensions = { 400, 400 },
+        visible    = true
     }
 };
 local configs = default_config;
@@ -58,9 +58,7 @@ local configs = default_config;
 ----------------------------------------------------------------------------------------------------
 -- Variables
 ----------------------------------------------------------------------------------------------------
-local ashitaDataManager     = AshitaCore:GetMemoryManager();
-local ashitaPtrManager      = AshitaCore:GetPointerManager();
-local ashitaResourceManager = AshitaCore:GetResourceManager();
+local ashitaDataManager = AshitaCore:GetMemoryManager();
 
 local ashitaPlayer    = ashitaDataManager:GetPlayer();
 local ashitaParty     = ashitaDataManager:GetParty();
@@ -87,12 +85,17 @@ fisherman =
     zoneID = 0,
     rodID = 0,
     baitID = 0,
-    rod = { },
-    bait = { },
     zone = { },
     area = { },
+    rod = { },
+    bait = { },
+    valid_area = false,
+    valid_rod = false,
+    valid_bait = false,
     pos = { x=0, y=0, z=0 },
-    skill = 95
+    skill = 95,
+	equip_changed = false,
+    zoning = false
 }
 
 gui_variables =
@@ -119,7 +122,7 @@ end
 ----------------------------------------------------------------------------------------------------
 local function get_current_date()
     local vanadate = { };
-    
+
     local timestamp = get_raw_timestamp();
     local ts = (timestamp + 92514960) * 25;
     local day = math.floor(ts / 86400);
@@ -130,7 +133,7 @@ local function get_current_date()
     if (0 > mpercent) then
         mpercent = math.abs(mpercent);
     end
-    
+
     -- Calculate the moon direction
     if mphase == 42 or mphase == 0 then
         vanadate.moon_direction = 0; -- None
@@ -141,20 +144,20 @@ local function get_current_date()
     end
 
     -- Build the date information..
-    vanadate.weekday        = (day % 8);
-    vanadate.hour           = math.floor(ts / 3600) % 24;
-    vanadate.day            = (day % 30) + 1;
-    vanadate.month          = math.floor((day % 360) / 30) + 1;
-    vanadate.year           = math.floor(day / 360);
-    vanadate.moon_percent   = math.floor(mpercent + 0.5);
+    vanadate.weekday      = (day % 8);
+    vanadate.hour         = math.floor(ts / 3600) % 24;
+    vanadate.day          = (day % 30) + 1;
+    vanadate.month        = math.floor((day % 360) / 30) + 1;
+    vanadate.year         = math.floor(day / 360);
+    vanadate.moon_percent = math.floor(mpercent + 0.5);
 
     -- Calculate the Ashita Moon Phase
-    if (38 <= mphase) then  
+    if (38 <= mphase) then
         vanadate.ashita_moon_phase = math.floor((mphase - 38) / 7);
     else
         vanadate.ashita_moon_phase = math.floor((mphase + 46) / 7);
     end
-    
+
     -- Convert to the Moon Phase that LSB uses for Fishing
     vanadate.moon_phase = math.floor((vanadate.ashita_moon_phase+1)*21/32); -- Just happens to work
 
@@ -334,9 +337,9 @@ function MONTHPATTERN_10(x) return COSPATTERN(x, 0.50, 0.50,  0.53, 0.50); end
 --  ret: Modifier value between 0.25-1.25 from the selected hour pattern
 ----------------------------------------------------------------------------------------------------
 function GetHourlyModifier(fish)
-    local modifier = 0.5;
+    local modifier    = 0.5;
     local hourPattern = fish["hour_pattern"];
-    local hour = astrology.hour;
+    local hour        = astrology.hour;
 
     if     hourPattern == 1 then modifier = HOURPATTERN_1(hour);
     elseif hourPattern == 2 then
@@ -359,9 +362,9 @@ end
 --  ret: Modifier value between 0.25-1.25 from the selected moon pattern
 ----------------------------------------------------------------------------------------------------
 function GetMoonModifier(fish)
-    local modifier = 1.0;
+    local modifier    = 1.0;
     local moonPattern = fish["moon_pattern"]
-    local moonPhase = astrology.phase;
+    local moonPhase   = astrology.phase;
 
     if     moonPattern == 1 then modifier = MOONPATTERN_1(moonPhase);
     elseif moonPattern == 2 then modifier = MOONPATTERN_2(moonPhase);
@@ -380,9 +383,9 @@ end
 --  ret: Modifier value between 0.25-1.25 from the selected month pattern
 ----------------------------------------------------------------------------------------------------
 function GetMonthlyTidalInfluence(fish)
-    local modifier = 0.5;
+    local modifier     = 0.5;
     local monthPattern = fish["month_pattern"];
-    local month = astrology.month;
+    local month        = astrology.month;
 
     if     monthPattern == 1 then modifier = MONTHPATTERN_1(month);
     elseif monthPattern == 2 then modifier = MONTHPATTERN_2(month);
@@ -405,7 +408,7 @@ end
 --  ret: Modifier value between 1.0-1.2
 ----------------------------------------------------------------------------------------------------
 function GetWeatherModifier()
-    local weather = astrology.weather;
+    local weather  = astrology.weather;
     local modifier = 1.0;
 
     if     weather == WEATHER.RAIN   then modifier = 1.1;
@@ -450,11 +453,11 @@ end
 function GetFishingArea(zoneID)
     local bound_type;
     local ret = { };
-    
+
     -- Sort the areas in the zone by bound_type so that the default(0) comes last
     local areaTable = GetAreasInZone(zoneID);
     table.sort(areaTable, function(k1, k2) return k1.bound_type > k2.bound_type end );
-    
+
     for _, v in ipairs(areaTable) do
         bound_type = v["bound_type"];
         if bound_type == 0 then
@@ -654,7 +657,7 @@ end
 --  ret: None
 ----------------------------------------------------------------------------------------------------
 function UpdateFisherman()
-    local fishingData = ashitaPlayer:GetCraftSkill(0);
+    local fishingData = ashitaPlayer:GetCraftSkill(0); -- Fishing is first in craftskills_t
     fisherman.skill = fishingData:GetSkill();
 
     local index = ashitaParty:GetMemberTargetIndex(0);
@@ -667,9 +670,22 @@ function UpdateFisherman()
     fisherman.rodID  = GetItemInEquipSlot(EQUIPMENTSLOTS.RANGE);
     fisherman.baitID = GetItemInEquipSlot(EQUIPMENTSLOTS.AMMO);
 
+	fisherman.zone = GetZoneInfo(fisherman.zoneID)
     fisherman.area = GetFishingArea(fisherman.zoneID);
     fisherman.rod  = GetRod(fisherman.rodID);
     fisherman.bait = GetBait(fisherman.baitID);
+
+    if next(fisherman.area) == nil then fisherman.valid_area = false;
+    else                                fisherman.valid_area = true;
+    end
+
+    if next(fisherman.rod) == nil  then fisherman.valid_rod  = false;
+    else                                fisherman.valid_rod  = true;
+    end
+
+    if next(fisherman.bait) == nil then fisherman.valid_bait = false;
+    else                                fisherman.valid_bait = true;
+    end
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -771,8 +787,7 @@ function FishingCheck(fishingSkill, rod, bait, area)
     local noCatchMoonModifier  = MOONPATTERN_5(mphase);
 
     local CZoneID   = fisherman.zoneID;
-    local CZoneInfo = GetZoneInfo(CZoneID);
-    fisherman.zone  = CZoneInfo
+    local CZoneInfo = fisherman.zone;
 
     -- Adjust weights by whether or not the player is in a city
     if CZoneInfo["type"] % 2 == 1 then
@@ -883,11 +898,24 @@ function FishingCheck(fishingSkill, rod, bait, area)
     local chance, fish_name, pool_size, restock_rate;
     gui_variables.fishChances = { };
     for _, entry in pairs(FishHookPool) do
-        chance = entry["chance"] / FishHookChanceTotal * gui_variables.fishChance;
-        fish_name  = entry["fish"].name;
-        pool_size = entry["group"].pool_size;
+        chance       = entry["chance"] / FishHookChanceTotal * gui_variables.fishChance;
+        fish_name    = entry["fish"].name;
+        pool_size    = entry["group"].pool_size;
         restock_rate = entry["group"].restock_rate;
         table.insert(gui_variables.fishChances, { chance, fish_name, pool_size, restock_rate });
+    end
+end
+
+----------------------------------------------------------------------------------------------------
+-- func: Update
+-- desc: Update the Fisherman and Astrology states, then run Fishing calculations
+--  ret: Nothing
+----------------------------------------------------------------------------------------------------
+function Update()
+    UpdateFisherman(); -- Updates the fisherman.valid_x variables
+    UpdateAstrology();
+    if fisherman.valid_rod and fisherman.valid_bait and fisherman.valid_area then
+        FishingCheck(fisherman.skill, fisherman.rod, fisherman.bait, fisherman.area);
     end
 end
 
@@ -896,46 +924,80 @@ end
 -- desc: Event called when the addon is being loaded.
 ----------------------------------------------------------------------------------------------------
 ashita.events.register("load", "load_cb", function ()
-    UpdateFisherman();
-    UpdateAstrology();
-    FishingCheck(fisherman.skill, fisherman.rod, fisherman.bait, fisherman.area);
+    Update();
 end);
 
 ----------------------------------------------------------------------------------------------------
--- func: render
+-- func: packet_out
+-- desc: Event called when the client is sending a packet to the server.
+----------------------------------------------------------------------------------------------------
+ashita.events.register('packet_out', 'gofish_out_packet', function(e)
+    if e.id == EVENTS.FISHING_OUT and struct.unpack("H", e.data, 0x0A) == 0x0E04 then
+        Update();
+	elseif e.id == EVENTS.EQUIPCHG_OUT then
+		fisherman.equip_changed = true;
+    end
+end);
+
+----------------------------------------------------------------------------------------------------
+-- func: packet_in
+-- desc: Event called when the client is receiving a packet from the server.
+----------------------------------------------------------------------------------------------------
+ashita.events.register('packet_in', 'gofish_in_packet', function(e)
+    if e.id == EVENTS.ZONEOUT_IN then -- zoning out
+        fisherman.zoning = true;
+    elseif (e.id == EVENTS.ZONEDONE_IN and fisherman.zoning) then -- Equipment ready after zoning
+        Update();
+        fisherman.zoning = false;
+	elseif (e.id == EVENTS.EQUIPCHG_IN and fisherman.equip_changed) then
+		Update();
+		fisherman.equip_changed = false;
+    end
+end);
+
+----------------------------------------------------------------------------------------------------
+-- func: d3d_present
 -- desc: Hook up to the Ashita render tick
 ----------------------------------------------------------------------------------------------------
 ashita.events.register("d3d_present", "present_cb", function()
     imgui.SetNextWindowSize(default_config.window.dimensions, ImGuiCond_FirstUseEver);
     imgui.SetNextWindowPos(default_config.window.position, ImGuiCond_FirstUseEver);
-    
-    index = ashitaParty:GetMemberTargetIndex(0);
-    local posX  = ashitaEntity:GetLocalPositionX(index);
-    local posY  = ashitaEntity:GetLocalPositionZ(index); -- swapped with Z
-    local posZ  = ashitaEntity:GetLocalPositionY(index); -- swapped with Y
-    
-    local foundArea = fisherman.area["areaid"] ~= nil;
 
-    if imgui.Begin("GoFishMainWindow", true) then
-        imgui.Text(string.format("Skill: %d", fisherman.skill));
-        imgui.Text(string.format("Zone: %s(%d)", fisherman.zone["name"], GetCurrentZoneId()));
-        if foundArea then
-            imgui.Text(string.format("Area: %s(%d)", fisherman.area["name"], fisherman.area["areaid"]));
-        else
-            imgui.Text("Area: None");
-        end
-        imgui.Text(string.format("Rod: %s(%d)", fisherman.rod["name"], fisherman.rodID));
-        imgui.Text(string.format("Bait: %s(%d)", fisherman.bait["name"], fisherman.baitID));
-        if foundArea then
-            for _, entry in pairs(gui_variables.fishChances) do
-                imgui.Text (string.format("Chance: %.2f  Name: %s", entry[1], entry[2]));
-            end
-            imgui.Text(string.format("Chance: %.2f  Name: %s", gui_variables.itemChance, "Item"));
-            imgui.Text(string.format("Chance: %.2f  Name: %s", gui_variables.mobChance, "Mob"));
-            imgui.Text(string.format("Chance: %.2f  Name: %s", gui_variables.noChance, "No Catch"));
-        end
-        imgui.Text(string.format("h:%d p:%d m:%d", astrology.hour, astrology.phase, astrology.month));
-        imgui.Text(string.format("x:%.2f y:%.2f z:%.2f", posX, posY, posZ));
-        imgui.End();
-    end
+    index = ashitaParty:GetMemberTargetIndex(0);
+    local posX = ashitaEntity:GetLocalPositionX(index);
+    local posY = ashitaEntity:GetLocalPositionZ(index); -- swapped with Z
+    local posZ = ashitaEntity:GetLocalPositionY(index); -- swapped with Y
+
+	if not fisherman.zoning then
+		if imgui.Begin("GoFishMainWindow", true) then
+			imgui.Text(string.format("Skill: %d", fisherman.skill));
+			imgui.Text(string.format("Zone: %s(%d)", fisherman.zone["name"], GetCurrentZoneId()));
+			if fisherman.valid_area then
+				imgui.Text(string.format("Area: %s(%d)", fisherman.area["name"], fisherman.area["areaid"]));
+			else
+				imgui.Text("Area: None");
+			end
+			if fisherman.valid_rod then
+				imgui.Text(string.format("Rod:  %s(%d)", fisherman.rod["name"], fisherman.rodID));
+			else
+				imgui.Text("Rod:  None");
+			end
+			if fisherman.valid_bait then
+				imgui.Text(string.format("Bait: %s(%d)", fisherman.bait["name"], fisherman.baitID));
+			else
+				imgui.Text("Bait: None");
+			end
+			if fisherman.valid_area then
+				for _, entry in pairs(gui_variables.fishChances) do
+					imgui.Text (string.format("Chance: %.2f  Name: %s", entry[1], entry[2]));
+				end
+				imgui.Text(string.format("Chance: %.2f  Name: %s", gui_variables.itemChance, "Item"));
+				imgui.Text(string.format("Chance: %.2f  Name: %s", gui_variables.mobChance, "Mob"));
+				imgui.Text(string.format("Chance: %.2f  Name: %s", gui_variables.noChance, "No Catch"));
+			end
+			--imgui.Text(string.format("h:%d p:%d m:%d", astrology.hour, astrology.phase, astrology.month));
+			--imgui.Text(string.format("x:%.2f y:%.2f z:%.2f", posX, posY, posZ));
+			imgui.End();
+		end
+	end
 end);
