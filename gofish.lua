@@ -85,6 +85,13 @@ fisherman =
     zoneID = 0,
     rodID = 0,
     baitID = 0,
+	headID = 0;
+    neckID = 0;
+    bodyID = 0;
+    handsID = 0;
+    waistID = 0;
+    legsID = 0;
+    feetID = 0;
     zone = { },
     area = { },
     rod = { },
@@ -93,7 +100,9 @@ fisherman =
     valid_rod = false,
     valid_bait = false,
     pos = { x=0, y=0, z=0 },
-    skill = 95,
+    skill = 0,
+	skill_raw = 0,
+	skill_mod = 0,
 	equip_changed = false,
     zoning = false
 }
@@ -652,14 +661,79 @@ function GetItemInEquipSlot(slot)
 end
 
 ----------------------------------------------------------------------------------------------------
+-- func: GetSkillMod
+-- desc: Determine by how much the Player equipment increases fishing skill
+--  ret: Additional fishing skill from equipment
+----------------------------------------------------------------------------------------------------
+function GetSkillMod()
+    local skillMod = 0;
+
+    if     fisherman.headID  == FISHINGGEAR.TLAHTLAMAH_GLASSES then skillMod = skillMod + 1; end
+    if     fisherman.neckID  == FISHINGGEAR.FISHERS_TORQUE     then skillMod = skillMod + 2; end
+
+    if     fisherman.bodyID  == FISHINGGEAR.FISHERMANS_TUNICA  then skillMod = skillMod + 1;
+    elseif fisherman.bodyID  == FISHINGGEAR.ANGLERS_TUNICA     then skillMod = skillMod + 1;
+    elseif fisherman.bodyID  == FISHINGGEAR.FISHERMANS_SMOCK   then skillMod = skillMod + 1;
+    end
+
+    if     fisherman.handsID == FISHINGGEAR.FISHERMANS_GLOVES  then skillMod = skillMod + 1;
+    elseif fisherman.handsID == FISHINGGEAR.ANGLERS_GLOVES     then skillMod = skillMod + 1;
+    end
+
+    if     fisherman.legsID  == FISHINGGEAR.FISHERMANS_HOSE    then skillMod = skillMod + 1;
+    elseif fisherman.legsID  == FISHINGGEAR.ANGLERS_HOSE       then skillMod = skillMod + 1;
+    end
+
+    if     fisherman.feetID  == FISHINGGEAR.FISHERMANS_BOOTS   then skillMod = skillMod + 1;
+    elseif fisherman.feetID  == FISHINGGEAR.ANGLERS_BOOTS      then skillMod = skillMod + 1;
+    elseif fisherman.feetID  == FISHINGGEAR.WADERS             then skillMod = skillMod + 2;
+    end
+
+    --if fisherman.headID == FISHINGGEAR.TRAINEES_SPECTACLES and fisherman.skill < 40 then
+    --    skillMod = skillMod + 1;
+    --end
+
+    return skillMod;
+end
+
+----------------------------------------------------------------------------------------------------
+-- func: UpdateEquipment
+-- desc: Updates all the Player equipment variables by calling Ashita API
+--  ret: None
+----------------------------------------------------------------------------------------------------
+function UpdateEquipment()
+    fisherman.rodID   = GetItemInEquipSlot(EQUIPMENTSLOTS.RANGE);
+    fisherman.baitID  = GetItemInEquipSlot(EQUIPMENTSLOTS.AMMO);
+	fisherman.headID  = GetItemInEquipSlot(EQUIPMENTSLOTS.HEAD);
+    fisherman.neckID  = GetItemInEquipSlot(EQUIPMENTSLOTS.NECK);
+    fisherman.bodyID  = GetItemInEquipSlot(EQUIPMENTSLOTS.BODY);
+    fisherman.handsID = GetItemInEquipSlot(EQUIPMENTSLOTS.HANDS);
+    fisherman.waistID = GetItemInEquipSlot(EQUIPMENTSLOTS.WAIST);
+    fisherman.legsID  = GetItemInEquipSlot(EQUIPMENTSLOTS.LEGS);
+    fisherman.feetID  = GetItemInEquipSlot(EQUIPMENTSLOTS.FEET);
+	
+	fisherman.rod  = GetRod(fisherman.rodID);
+    fisherman.bait = GetBait(fisherman.baitID);
+end
+
+----------------------------------------------------------------------------------------------------
 -- func: UpdateFisherman
 -- desc: Updates all the Player state variables by calling Ashita API
 --  ret: None
 ----------------------------------------------------------------------------------------------------
 function UpdateFisherman()
-    local fishingData = ashitaPlayer:GetCraftSkill(0); -- Fishing is first in craftskills_t
-    fisherman.skill = fishingData:GetSkill();
-
+	-- Update Player fishing skill
+    local fishingData   = ashitaPlayer:GetCraftSkill(0); -- Fishing is first in craftskills_t
+    fisherman.skill_raw = fishingData:GetSkill();
+	
+	-- Update Player additional fishing skill from equipment
+	UpdateEquipment();
+	fisherman.skill_mod = GetSkillMod();
+	
+	-- Total Player fishing skill
+	fisherman.skill = fisherman.skill_raw + fisherman.skill_mod;
+	
+	-- Update Player location
     local index = ashitaParty:GetMemberTargetIndex(0);
     local posX  = ashitaEntity:GetLocalPositionX(index);
     local posY  = ashitaEntity:GetLocalPositionZ(index); -- swapped with Z
@@ -667,14 +741,10 @@ function UpdateFisherman()
     fisherman.pos = { x = posX, y = posY, z = posZ };
 
     fisherman.zoneID = GetCurrentZoneId() --Calls ashitaParty:GetMemberZone(0)
-    fisherman.rodID  = GetItemInEquipSlot(EQUIPMENTSLOTS.RANGE);
-    fisherman.baitID = GetItemInEquipSlot(EQUIPMENTSLOTS.AMMO);
-
-	fisherman.zone = GetZoneInfo(fisherman.zoneID)
-    fisherman.area = GetFishingArea(fisherman.zoneID);
-    fisherman.rod  = GetRod(fisherman.rodID);
-    fisherman.bait = GetBait(fisherman.baitID);
-
+	fisherman.zone   = GetZoneInfo(fisherman.zoneID)
+    fisherman.area   = GetFishingArea(fisherman.zoneID);
+    
+	-- Update related state variables
     if next(fisherman.area) == nil then fisherman.valid_area = false;
     else                                fisherman.valid_area = true;
     end
@@ -699,6 +769,117 @@ function UpdateAstrology()
     astrology.phase   = get_current_date().moon_phase;
     astrology.month   = get_current_date().month;
     astrology.weather = get_weather();
+end
+
+----------------------------------------------------------------------------------------------------
+-- func: CalculateBreakChance
+-- desc: Calculate the chance that a given fish will break the currently equipped rod
+--  ret: Precentage chance to break rod
+----------------------------------------------------------------------------------------------------
+function CalculateBreakChance(fish)
+    local levelDiffBonus = 0;
+    local legendaryBonus = 0;
+    local sizePenalty    = 0;
+
+    if fisherman.rod["breakable"] == 0 then
+        return 0.0;
+    end
+
+    if fisherman.skill + 10 > fish["skill_level"] then
+        levelDiffBonus = 2;
+    end
+
+    if fisherman.rod["legendary"] == 0 and fish["size_type"] > fisherman.rod["size_type"] then
+        sizePenalty = 2;
+    elseif fisherman.rod["legendary"] == 1 and fish["size_type"] == FISHINGSIZETYPE.LARGE then
+        legendaryBonus = 1;
+    end
+
+    if fisherman.rod["legendary"] == 0 and fish["legendary"] == 1 then
+        sizePenalty = 5;
+    end
+
+    if fish["ranking"] > fisherman.rod["max_rank"] + levelDiffBonus + legendaryBonus then
+        local strDuraDiff = fish["ranking"] - (fisherman.rod["max_rank"] + levelDiffBonus + legendaryBonus);
+        return math.clamp(math.floor((strDuraDiff + sizePenalty) * 1.3), 0, 55);
+    else
+        return 0.0;
+    end
+end
+
+----------------------------------------------------------------------------------------------------
+-- func: CalculateSnapChance
+-- desc: Calculate the chance that a given fish will snap the line of the currently equipped rod
+--  ret: Precentage chance to snap line
+----------------------------------------------------------------------------------------------------
+function CalculateSnapChance(fish)
+    local levelDiffBonus  = 0;
+    local legendaryBonus  = 0;
+    local sizePenalty     = 0;
+
+    if fisherman.skill + 10 > fish["skill_level"] then
+        levelDiffBonus = 2;
+    end
+
+    if fisherman.rod["legendary"] == 0 and fish["size_type"] > fisherman.rod["size_type"] then
+        sizePenalty = 2;
+    end
+
+    if fish["legendary"] == 1 then
+        if fisherman.rod["legendary"] == 0 then
+            sizePenalty = sizePenalty + 3;
+        else
+            legendaryBonus = 1;
+        end
+    end
+
+    local totalDurability = fisherman.rod["max_rank"] + levelDiffBonus + legendaryBonus - sizePenalty;
+
+    if fish["ranking"] > totalDurability then
+        return math.clamp(math.floor((fish["ranking"] - totalDurability) * 8.5), 0, 55);
+    else
+        return 0.0;
+    end
+end
+
+----------------------------------------------------------------------------------------------------
+-- func: CalculateLoseChance
+-- desc: Calculate the chance that a given fish be lost due to skill (and other variables)
+--  ret: Precentage chance to lose catch
+----------------------------------------------------------------------------------------------------
+function CalculateLoseChance(fish)
+    local tooBigChance   = 0;
+    local tooSmallChance = 0;
+    local lowSkillChance = 0;
+
+    local catchType;
+    if fish["size_type"] == FISHINGSIZETYPE.SMALL then catchType = FISHINGCATCHTYPE.SMALLFISH;
+    else                                               catchType = FISHINGCATCHTYPE.BIGFISH;
+    end
+
+    if fisherman.rod["legendary"] == 0 then
+        if     fish["size_type"] > fisherman.rod["size_type"] and fish["ranking"] > fisherman.rod["max_rank"] then
+            tooBigChance = 50 + fish["skill_level"] - fisherman.skill;
+        elseif fish["size_type"] < fisherman.rod["size_type"] and fish["ranking"] < fisherman.rod["min_rank"] then
+            tooSmallChance = 50;
+            if fisherman.skill < fish["skill_level"] then
+                tooSmallChance = tooSmallChance + fish["skill_level"] - fisherman.skill;
+            end
+            if fisherman.skill > fish["skill_level"] then
+                tooSmallChance = tooSmallChance - math.min(fisherman.skill - fish["skill_level"], tooSmallChance);
+            end
+        end
+    end
+
+    if catchType < FISHINGCATCHTYPE.ITEM and fisherman.skill + 7 < fish["skill_level"] then
+        lowSkillChance = math.floor((fish["skill_level"] - (fisherman.skill + 7)) * 0.8);
+    end
+
+    if     tooBigChance   > 0 and tooBigChance   > lowSkillChance   then return math.clamp(tooBigChance, 0 , 50);
+    elseif tooSmallChance > 0 and tooSmallChance > lowSkillChance   then return math.clamp(tooSmallChance, 0, 50);
+    elseif catchType < FISHINGCATCHTYPE.ITEM and lowSkillChance > 0 then return math.clamp(lowSkillChance, 0, 55);
+    else                                                                 return 0.0;
+    end
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -902,7 +1083,12 @@ function FishingCheck(fishingSkill, rod, bait, area)
         fish_name    = entry["fish"].name;
         pool_size    = entry["group"].pool_size;
         restock_rate = entry["group"].restock_rate;
-        table.insert(gui_variables.fishChances, { chance, fish_name, pool_size, restock_rate });
+		chance_lose  = CalculateLoseChance(entry.fish);
+		chance_snap  = CalculateSnapChance(entry.fish);
+		chance_break = CalculateBreakChance(entry.fish);
+        table.insert(gui_variables.fishChances,
+			{ chance, fish_name, pool_size, restock_rate, chance_lose, chance_snap, chance_break }
+		);
     end
 end
 
@@ -912,7 +1098,7 @@ end
 --  ret: Nothing
 ----------------------------------------------------------------------------------------------------
 function Update()
-    UpdateFisherman(); -- Updates the fisherman.valid_x variables
+    UpdateFisherman(); -- Updates the fisherman.valid_xxx variables below
     UpdateAstrology();
     if fisherman.valid_rod and fisherman.valid_bait and fisherman.valid_area then
         FishingCheck(fisherman.skill, fisherman.rod, fisherman.bait, fisherman.area);
@@ -963,14 +1149,14 @@ ashita.events.register("d3d_present", "present_cb", function()
     imgui.SetNextWindowSize(default_config.window.dimensions, ImGuiCond_FirstUseEver);
     imgui.SetNextWindowPos(default_config.window.position, ImGuiCond_FirstUseEver);
 
-    index = ashitaParty:GetMemberTargetIndex(0);
-    local posX = ashitaEntity:GetLocalPositionX(index);
-    local posY = ashitaEntity:GetLocalPositionZ(index); -- swapped with Z
-    local posZ = ashitaEntity:GetLocalPositionY(index); -- swapped with Y
+    --index = ashitaParty:GetMemberTargetIndex(0);
+    --local posX = ashitaEntity:GetLocalPositionX(index);
+    --local posY = ashitaEntity:GetLocalPositionZ(index); -- swapped with Z
+    --local posZ = ashitaEntity:GetLocalPositionY(index); -- swapped with Y
 
 	if not fisherman.zoning then
 		if imgui.Begin("GoFishMainWindow", true) then
-			imgui.Text(string.format("Skill: %d", fisherman.skill));
+			imgui.Text(string.format("Skill: %d(%d)", fisherman.skill_raw, fisherman.skill_mod));
 			imgui.Text(string.format("Zone: %s(%d)", fisherman.zone["name"], GetCurrentZoneId()));
 			if fisherman.valid_area then
 				imgui.Text(string.format("Area: %s(%d)", fisherman.area["name"], fisherman.area["areaid"]));
@@ -978,22 +1164,59 @@ ashita.events.register("d3d_present", "present_cb", function()
 				imgui.Text("Area: None");
 			end
 			if fisherman.valid_rod then
-				imgui.Text(string.format("Rod:  %s(%d)", fisherman.rod["name"], fisherman.rodID));
+				imgui.Text(string.format("Rod:  %s", fisherman.rod["name"]));
 			else
 				imgui.Text("Rod:  None");
 			end
 			if fisherman.valid_bait then
-				imgui.Text(string.format("Bait: %s(%d)", fisherman.bait["name"], fisherman.baitID));
+				imgui.Text(string.format("Bait: %s", fisherman.bait["name"]));
 			else
 				imgui.Text("Bait: None");
 			end
 			if fisherman.valid_area then
-				for _, entry in pairs(gui_variables.fishChances) do
-					imgui.Text (string.format("Chance: %.2f  Name: %s", entry[1], entry[2]));
+				if imgui.BeginTable("resultTable", 5) then
+					imgui.TableNextRow();
+					imgui.TableSetColumnIndex(0);
+					imgui.Text("Name");
+					imgui.TableSetColumnIndex(1);
+					imgui.Text("Hook");
+					imgui.TableSetColumnIndex(2);
+					imgui.Text("Lose");
+					imgui.TableSetColumnIndex(3);
+					imgui.Text("Snap");
+					imgui.TableSetColumnIndex(4);
+					imgui.Text("Break");
+					for _, entry in pairs(gui_variables.fishChances) do
+						imgui.TableNextRow();
+						imgui.TableSetColumnIndex(0);
+						imgui.Text(string.format("%s", entry[2]));
+						imgui.TableSetColumnIndex(1);
+						imgui.Text(string.format("%.1f", entry[1]));
+						imgui.TableSetColumnIndex(2);
+						imgui.Text(string.format("%.1f", entry[5]));
+						imgui.TableSetColumnIndex(3);
+						imgui.Text(string.format("%.1f", entry[6]));
+						imgui.TableSetColumnIndex(4);
+						imgui.Text(string.format("%.1f", entry[7]));
+					end
+					imgui.TableNextRow();
+					imgui.TableSetColumnIndex(0);
+					imgui.Text("Item");
+					imgui.TableSetColumnIndex(1);
+					imgui.Text(string.format("%.1f", gui_variables.itemChance));
+					imgui.TableNextRow();
+					imgui.TableSetColumnIndex(0);
+					imgui.Text("Mob");
+					imgui.TableSetColumnIndex(1);
+					imgui.Text(string.format("%.1f", gui_variables.mobChance));
+					imgui.TableNextRow();
+					imgui.TableSetColumnIndex(0);
+					imgui.Text("No Catch");
+					imgui.TableSetColumnIndex(1);
+					imgui.Text(string.format("%.1f", gui_variables.noChance));
+					
+					imgui.EndTable();
 				end
-				imgui.Text(string.format("Chance: %.2f  Name: %s", gui_variables.itemChance, "Item"));
-				imgui.Text(string.format("Chance: %.2f  Name: %s", gui_variables.mobChance, "Mob"));
-				imgui.Text(string.format("Chance: %.2f  Name: %s", gui_variables.noChance, "No Catch"));
 			end
 			--imgui.Text(string.format("h:%d p:%d m:%d", astrology.hour, astrology.phase, astrology.month));
 			--imgui.Text(string.format("x:%.2f y:%.2f z:%.2f", posX, posY, posZ));

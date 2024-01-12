@@ -23,6 +23,76 @@ FISHINGBAITTYPE =
     SPECIAL = 2
 }
 
+FISHINGSIZETYPE =
+{
+    SMALL = 0,
+    LARGE = 1
+}
+
+FISHINGCATCHTYPE =
+{
+    NONE         = 0,
+    SMALLFISH    = 1,
+    BIGFISH      = 2,
+    ITEM         = 3,
+    MOB          = 4,
+    CHEST        = 5,
+    SMALL_CUSTOM = 6,
+    LARGE_CUSTOM = 7,
+    MOB_CUSTOM   = 8
+}
+
+FISHINGGEAR =
+{
+    -- head
+    TLAHTLAMAH_GLASSES  = 25608,
+    TRAINEES_SPECTACLES = 11499,
+    -- neck
+    FISHERS_TORQUE      = 10925,
+    -- body
+    FISHERMANS_TUNICA   = 13808,
+    ANGLERS_TUNICA      = 13809,
+    FISHERMANS_APRON    = 14400,
+    FISHERMANS_SMOCK    = 11337,
+    -- hands
+    FISHERMANS_GLOVES   = 14070,
+    ANGLERS_GLOVES      = 14071,
+    -- waist
+    FISHERS_ROPE        = 11768,
+    FISHERMANS_BELT     = 15452,
+    -- legs
+    FISHERMANS_HOSE     = 14292,
+    ANGLERS_HOSE        = 14293,
+    -- feet
+    FISHERMANS_BOOTS    = 14171,
+    ANGLERS_BOOTS       = 14172,
+    WADERS              = 14195
+}
+
+FISHINGROD =
+{
+    WILLOW          = 17391,
+    YEW             = 17390,
+    BAMBOO          = 17389,
+    FASTWATER       = 17388,
+    TARUTARU        = 17387,
+    LU_SHANG        = 17386,
+    GLASS_FIBER     = 17385,
+    CARBON          = 17384,
+    CLOTHESPOLE     = 17383,
+    SINGLE_HOOK     = 17382,
+    COMPOSITE       = 17381,
+    MITHRAN         = 17380,
+    HALCYON         = 17015,
+    HUME            = 17014,
+    JUDGE           = 17012,
+    GOLDFISH_BASKET = 17013,
+    EBISU           = 17011,
+    MAZE_MONGER     = 19319,
+    LU_SHANG_1      = 19320,
+    EBISU_1         = 19321
+}
+
 CONTAINERS =
 {
     INVENTORY = 0,
@@ -80,11 +150,15 @@ EVENTS =
 }
 
 return {
-    WEATHER         = WEATHER,
-    MOONPHASE       = MOONPHASE,
-    FISHINGBAITTYPE = FISHINGBAITTYPE,
-    CONTAINERS      = CONTAINERS,
-    EQUIPMENTSLOTS  = EQUIPMENTSLOTS,
-    WEEKDAY         = WEEKDAY,
-    EVENTS          = EVENTS
+    WEATHER          = WEATHER,
+    MOONPHASE        = MOONPHASE,
+    FISHINGBAITTYPE  = FISHINGBAITTYPE,
+	FISHINGSIZETYPE  = FISHINGSIZETYPE,
+	FISHINGCATCHTYPE = FISHINGCATCHTYPE,
+	FISHINGGEAR      = FISHINGGEAR,
+	FISHINGROD       = FISHINGROD,
+    CONTAINERS       = CONTAINERS,
+    EQUIPMENTSLOTS   = EQUIPMENTSLOTS,
+    WEEKDAY          = WEEKDAY,
+    EVENTS           = EVENTS
 }
