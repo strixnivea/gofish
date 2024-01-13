@@ -14,6 +14,10 @@ function table_stripkeys(target)
     return ret;
 end
 
+function table_isempty(target)
+    return (next(target) == nil);
+end
+
 function find_by_1(target, f, A, a)
     local ret = { };
     for _, v in pairs(target) do
@@ -110,6 +114,7 @@ end
 return {
     table_count     = table_count,
     table_stripkeys = table_stripkeys,
+    table_isempty   = table_isempty,
     find_by_1       = find_by_1,
     find_by_2       = find_by_2,
     exists_by_1     = exists_by_1,

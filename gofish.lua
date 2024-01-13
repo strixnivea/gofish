@@ -73,38 +73,40 @@ local weatherPtr  = ashita.memory.find('FFXiMain.dll', 0, '66A1????????663D????7
 ----------------------------------------------------------------------------------------------------
 astrology =
 {
-    ts = 0,
-    hour = 0,
-    phase = 0,
-    month = 0,
+    hour    = 0,
+    phase   = 0,
+    moondir = 0,
+    moonper = 0,
+    month   = 0,
     weather = 0
 }
 
 fisherman =
 {
-    zoneID = 0,
-    rodID = 0,
-    baitID = 0,
-	headID = 0;
-    neckID = 0;
-    bodyID = 0;
+    zoneID  = 0,
+    rodID   = 0,
+    baitID  = 0,
+	headID  = 0;
+    neckID  = 0;
+    bodyID  = 0;
     handsID = 0;
     waistID = 0;
     legsID = 0;
     feetID = 0;
     zone = { },
     area = { },
-    rod = { },
+    rod  = { },
     bait = { },
     valid_area = false,
-    valid_rod = false,
+    valid_rod  = false,
     valid_bait = false,
     pos = { x=0, y=0, z=0 },
-    skill = 0,
+    skill     = 0,
 	skill_raw = 0,
 	skill_mod = 0,
 	equip_changed = false,
-    zoning = false
+    zoning        = false,
+    in_city       = false
 }
 
 gui_variables =
@@ -153,6 +155,7 @@ local function get_current_date()
     end
 
     -- Build the date information..
+    vanadate.timestamp    = timestamp;
     vanadate.weekday      = (day % 8);
     vanadate.hour         = math.floor(ts / 3600) % 24;
     vanadate.day          = (day % 30) + 1;
@@ -711,7 +714,7 @@ function UpdateEquipment()
     fisherman.waistID = GetItemInEquipSlot(EQUIPMENTSLOTS.WAIST);
     fisherman.legsID  = GetItemInEquipSlot(EQUIPMENTSLOTS.LEGS);
     fisherman.feetID  = GetItemInEquipSlot(EQUIPMENTSLOTS.FEET);
-	
+
 	fisherman.rod  = GetRod(fisherman.rodID);
     fisherman.bait = GetBait(fisherman.baitID);
 end
@@ -725,14 +728,14 @@ function UpdateFisherman()
 	-- Update Player fishing skill
     local fishingData   = ashitaPlayer:GetCraftSkill(0); -- Fishing is first in craftskills_t
     fisherman.skill_raw = fishingData:GetSkill();
-	
+
 	-- Update Player additional fishing skill from equipment
 	UpdateEquipment();
 	fisherman.skill_mod = GetSkillMod();
-	
+
 	-- Total Player fishing skill
 	fisherman.skill = fisherman.skill_raw + fisherman.skill_mod;
-	
+
 	-- Update Player location
     local index = ashitaParty:GetMemberTargetIndex(0);
     local posX  = ashitaEntity:GetLocalPositionX(index);
@@ -740,21 +743,22 @@ function UpdateFisherman()
     local posZ  = ashitaEntity:GetLocalPositionY(index); -- swapped with Y
     fisherman.pos = { x = posX, y = posY, z = posZ };
 
-    fisherman.zoneID = GetCurrentZoneId() --Calls ashitaParty:GetMemberZone(0)
-	fisherman.zone   = GetZoneInfo(fisherman.zoneID)
-    fisherman.area   = GetFishingArea(fisherman.zoneID);
-    
+    fisherman.zoneID  = GetCurrentZoneId() --Calls ashitaParty:GetMemberZone(0)
+	fisherman.zone    = GetZoneInfo(fisherman.zoneID)
+    fisherman.area    = GetFishingArea(fisherman.zoneID);
+    fisherman.in_city = (fisherman.zone["type"] % 2 == 1); -- Need to do bit.band if enum changes
+
 	-- Update related state variables
-    if next(fisherman.area) == nil then fisherman.valid_area = false;
-    else                                fisherman.valid_area = true;
+    if table_isempty(fisherman.area) then fisherman.valid_area = false;
+    else                                  fisherman.valid_area = true;
     end
 
-    if next(fisherman.rod) == nil  then fisherman.valid_rod  = false;
-    else                                fisherman.valid_rod  = true;
+    if table_isempty(fisherman.rod)  then fisherman.valid_rod  = false;
+    else                                  fisherman.valid_rod  = true;
     end
 
-    if next(fisherman.bait) == nil then fisherman.valid_bait = false;
-    else                                fisherman.valid_bait = true;
+    if table_isempty(fisherman.bait) then fisherman.valid_bait = false;
+    else                                  fisherman.valid_bait = true;
     end
 end
 
@@ -764,11 +768,91 @@ end
 --  ret: None
 ----------------------------------------------------------------------------------------------------
 function UpdateAstrology()
-    astrology.ts      = get_raw_timestamp();
-    astrology.hour    = get_current_date().hour;
-    astrology.phase   = get_current_date().moon_phase;
-    astrology.month   = get_current_date().month;
-    astrology.weather = get_weather();
+    local vanadate    = get_current_date();
+
+    astrology.hour      = vanadate.hour;
+    astrology.phase     = vanadate.moon_phase;
+    astrology.moondir   = vanadate.moon_direction;
+    astrology.moonper   = vanadate.moon_percent;
+    astrology.month     = vanadate.month;
+    astrology.weather   = get_weather();
+end
+
+----------------------------------------------------------------------------------------------------
+-- func: FishingSkillup
+-- desc: Calculate the chance that a given fish will result in a skillup
+--  ret: Percent chance of skillup
+----------------------------------------------------------------------------------------------------
+function FishingSkillup(fish)
+    local levelDifference = 0;
+    --local maxSkillAmount = 1;
+    local charSkillLevel = math.floor(fisherman.skill_raw)
+
+    if fish["skill_level"] > charSkillLevel then
+        levelDifference = fish["skill_level"] - charSkillLevel;
+    end
+
+    if fish["skill_level"] <= charSkillLevel or levelDifference > 50 then
+        return 0.0;
+    end
+
+    -- TODO: Could check the players fishing rank and see if skill is capped
+
+    local skillRoll = 90;
+    --local bonusChanceRoll = 8;
+
+    if not table_isempty(fisherman.rod) and charSkillLevel < 50 and fisherman.rodID == FISHINGROD.LU_SHANG then
+        skillRoll = skillRoll + 20;
+    end
+
+    local normDist = math.exp(-0.5 * math.log(2 * math.pi) - math.log(5) - (levelDifference - 11)^2 / 50);
+    local distMod  = math.floor(normDist * 200);
+    local lowerLevelBonus = math.floor((100 - charSkillLevel) / 10);
+    local skillLevelPenalty = math.floor(charSkillLevel / 10);
+
+    local maxChance = math.max(4, distMod + lowerLevelBonus - skillLevelPenalty);
+
+    local moonDirection = astrology.moondir;
+    local phase         = astrology.moonper;
+    if moonDirection == 0 then
+        if phase == 0 then
+            skillRoll = skillRoll - 20;
+            --bonusChanceRoll = bonusChanceRoll - 3;
+        elseif phase == 100 then
+            skillRoll = skillRoll + 10;
+            --bonusChanceRoll = bonusChanceRoll + 3;
+        end
+    elseif moonDirection == 1 then
+        if phase <= 10 then
+            skillRoll = skillRoll - 15;
+            --bonusChanceRoll = bonusChanceRoll - 2;
+        elseif phase >= 95 and phase <= 100 then
+            skillRoll = skillRoll + 5;
+            --bonusChanceRoll = bonusChanceRoll + 2;
+        end
+    elseif moonDirection == 2 then
+        if phase <= 5 then
+            skillRoll = skillRoll - 10;
+            --bonusChanceRoll = bonusChanceRoll - 1;
+        --elseif phase >= 90 and phase <= 100 then
+            --bonusChanceRoll = bonusChanceRoll + 1;
+        end
+    end
+
+    if not fisherman.in_city then
+        skillRoll = skillRoll - 10;
+    end
+
+    if charSkillLevel < 50 then
+        skillRoll = skillRoll - (20 - math.floor(charSkillLevel / 3));
+    end
+
+    --maxSkillAmount = math.min(1 + math.floor(levelDifference / 5), 3)
+
+    -- TODO: Could calculate outcomes for bonusChanceRoll and cap skill increase based rank skill cap
+
+    -- Normally LSB would 'if math.rand(skillRoll) < maxChance', but this fuction returns a percent chance
+    return maxChance / skillRoll * 100;
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -937,7 +1021,10 @@ function CalculateHookChance(fishingSkill, fish, bait, rod)
         end
     end
 
-    -- TODO Shellfish Affinity
+    -- Shellfish Affinity
+    if bit.band(fisherman.bait["flags"], BAITFLAG.SHELLFISH_AFFINITY) and bit.band(fish["fish_entry"]["flags"], FISHFLAG.SHELLFISH) then
+        hookChance = hookChance + 50;
+    end
 
     -- Adjustment for fish rarity
     local multiplier;
@@ -971,7 +1058,7 @@ function FishingCheck(fishingSkill, rod, bait, area)
     local CZoneInfo = fisherman.zone;
 
     -- Adjust weights by whether or not the player is in a city
-    if CZoneInfo["type"] % 2 == 1 then
+    if fisherman.in_city then
         FishPoolWeight =      math.floor(15*fishPoolMoonModifier);
         ItemPoolWeight = 25 + math.floor(20*itemPoolMoonModifier);
         MobPoolWeight  = 0;
@@ -984,7 +1071,7 @@ function FishingCheck(fishingSkill, rod, bait, area)
     end
 
     local FishHookChanceTotal = 0;
-    local ItemHookChanceTotal = 0;
+    --local ItemHookChanceTotal = 0;
 
     local FishHookPool = { };
     local ItemHookPool = { };
@@ -1009,10 +1096,10 @@ function FishingCheck(fishingSkill, rod, bait, area)
             end
         end
     end
-    FishPoolWeight = math.clamp(FishPoolWeight + maxChance, 20, 120); -- Only increase the FishPoolWeight by chance of most likely fish
+    -- Only increase the FishPoolWeight by chance of most likely fish
+    FishPoolWeight = math.clamp(FishPoolWeight + maxChance, 20, 120);
 
     -- Add to the ItemHookPool all items that are eligible to catch
-    -- TODO Implement full code for ItemHookPool, but for now, just filter out quest items
     for _, v in pairs(ItemPool) do
         if v["fish_entry"]["quest"] == 255 and v["fish_entry"]["log"] == 255 then
             table.insert(ItemHookPool, v["fish_entry"])
@@ -1020,7 +1107,6 @@ function FishingCheck(fishingSkill, rod, bait, area)
     end
 
     -- Add to the MobHookPool all mobs that are eligible to catch
-    -- TODO Implement NM and Quest mobs
     for _, v in pairs(MobPool) do
         if v["nm"] == 0 and (v["areaid"] == 0 or v["areaid"] == area["areaid"]) then
             table.insert(MobHookPool, v);
@@ -1035,13 +1121,46 @@ function FishingCheck(fishingSkill, rod, bait, area)
         NoCatchWeight = NoCatchWeight + CZoneInfo["difficulty"] * 25; --Assume average of 20 and 30
     end
 
-    -- TODO Fishing Apron Adjustment
+    -- Fishing Apron Adjustment
+    if fisherman.bodyID == FISHINGGEAR.FISHERMANS_APRON and ItemPoolWeight > 0 then
+        local sub = math.floor(ItemPoolWeight * 0.25);
+        if sub > 0 then
+            ItemPoolWeight = ItemPoolWeight - sub;
+            NoCatchWeight  = NoCatchWeight  + sub;
+        end
+    end
 
-    -- TODO Poor Fish Bait Flag Adjustment
+    -- Poor Fish Bait Flag Adjustment
+    if bit.band(fisherman.bait["flags"], BAITFLAG.POOR_FISH) and FishPoolWeight > 0 then
+        FishPoolWeight = FishPoolWeight - math.floor(FishPoolWeight * 0.25);
+        ItemPoolWeight = FishPoolWeight + math.floor(FishPoolWeight * 0.10);
+        NoCatchWeight  = NoCatchWeight  + math.floor(NoCatchWeight  * 0.25);
+    end
 
-    -- If there are no fish that could be hooked, adjust the weights
+    -- Normally this loop would select the hooked fish from the fish pool and apply the LU_SHANG/EBISU bonus based on
+    -- that fish. Instead this loop adds a scaled bonus for each fish proportional to its hook chance.
     if table_count(FishHookPool) > 0 then
-        -- TODO Lu Shang and Ebisu adjustments to FishPoolWeight
+        if fisherman.rodID == FISHINGROD.LU_SHANG or fisherman.rodID == FISHINGROD.EBISU then
+            for _, entry in pairs(FishHookPool) do
+                local fish = entry["fish"];
+
+                if fisherman.skill > fish["skill_level"] + 7 then
+                    local skilldiff    = fisherman.skill - fish["skill_level"];
+                    local initialBonus = 10;
+                    local divisor      = 15;
+                    if fisherman.rodID == FISHINGROD.EBISU then
+                        initialBonus = 15;
+                        divisor      = 13;
+                    end
+                    local skillmultiplier = 1 + math.floor(skilldiff / divisor);
+                    local addWeight = initialBonus + math.floor((skilldiff * skillmultiplier) / (fish["size_type"] + 1));
+                    local hookChanceNorm = entry["chance"] / FishHookChanceTotal; -- Normalize by FishHookChanceTotal
+                    -- Adjust the FishPoolWeight proportionally by the chance this fish was chosen
+                    FishPoolWeight = FishPoolWeight + math.floor( addWeight * hookChanceNorm + 0.5 ); -- math.round
+                end
+            end
+        end
+    -- If there are no fish that could be hooked, adjust the weights
     else
         NoCatchWeight = math.floor(NoCatchWeight + FishPoolWeight/2);
         FishPoolWeight = 0;
@@ -1076,7 +1195,7 @@ function FishingCheck(fishingSkill, rod, bait, area)
     gui_variables.mobChance  = mobChance  * 100;
     gui_variables.noChance   = noChance   * 100;
 
-    local chance, fish_name, pool_size, restock_rate;
+    local chance, fish_name, pool_size, restock_rate, chance_lose, chance_snap, chance_break, chance_up;
     gui_variables.fishChances = { };
     for _, entry in pairs(FishHookPool) do
         chance       = entry["chance"] / FishHookChanceTotal * gui_variables.fishChance;
@@ -1086,8 +1205,9 @@ function FishingCheck(fishingSkill, rod, bait, area)
 		chance_lose  = CalculateLoseChance(entry.fish);
 		chance_snap  = CalculateSnapChance(entry.fish);
 		chance_break = CalculateBreakChance(entry.fish);
+        chance_up    = FishingSkillup(entry.fish)
         table.insert(gui_variables.fishChances,
-			{ chance, fish_name, pool_size, restock_rate, chance_lose, chance_snap, chance_break }
+			{ chance, fish_name, pool_size, restock_rate, chance_lose, chance_snap, chance_break, chance_up }
 		);
     end
 end
@@ -1142,6 +1262,31 @@ ashita.events.register('packet_in', 'gofish_in_packet', function(e)
 end);
 
 ----------------------------------------------------------------------------------------------------
+-- func: command
+-- desc: Event called when the client sends a command to Ashita
+----------------------------------------------------------------------------------------------------
+ashita.events.register('command', 'gofish_command', function(e)
+    local args = e.command:args();
+    if #args == 0 then return; end
+
+    local valid_command = false;
+    args[1] = string.lower(args[1]);
+    for _, entry in pairs(addon.commands) do
+        if args[1] == entry then
+            valid_command = true;
+            break;
+        end
+    end
+    if valid_command == false then return; end
+
+    if #args > 1 then
+        if string.lower(args[2]) == "update" then
+            Update();
+        end
+    end
+end);
+
+----------------------------------------------------------------------------------------------------
 -- func: d3d_present
 -- desc: Hook up to the Ashita render tick
 ----------------------------------------------------------------------------------------------------
@@ -1175,17 +1320,12 @@ ashita.events.register("d3d_present", "present_cb", function()
 			end
 			if fisherman.valid_area then
 				if imgui.BeginTable("resultTable", 5) then
-					imgui.TableNextRow();
-					imgui.TableSetColumnIndex(0);
-					imgui.Text("Name");
-					imgui.TableSetColumnIndex(1);
-					imgui.Text("Hook");
-					imgui.TableSetColumnIndex(2);
-					imgui.Text("Lose");
-					imgui.TableSetColumnIndex(3);
-					imgui.Text("Snap");
-					imgui.TableSetColumnIndex(4);
-					imgui.Text("Break");
+					imgui.TableSetupColumn("Name", 16, 0.4);
+					imgui.TableSetupColumn("Hook", 16, 0.15);
+					imgui.TableSetupColumn("Lose", 16, 0.15);
+					imgui.TableSetupColumn("Snap", 16, 0.15);
+					imgui.TableSetupColumn("Break", 16, 0.15);
+					imgui.TableHeadersRow();
 					for _, entry in pairs(gui_variables.fishChances) do
 						imgui.TableNextRow();
 						imgui.TableSetColumnIndex(0);
@@ -1214,7 +1354,7 @@ ashita.events.register("d3d_present", "present_cb", function()
 					imgui.Text("No Catch");
 					imgui.TableSetColumnIndex(1);
 					imgui.Text(string.format("%.1f", gui_variables.noChance));
-					
+
 					imgui.EndTable();
 				end
 			end

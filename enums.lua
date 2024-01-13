@@ -93,6 +93,24 @@ FISHINGROD =
     EBISU_1         = 19321
 }
 
+BAITFLAG =
+{
+    NORMAL             = 0x00,
+    SINKING            = 0x01,
+    ITEM_BONUS         = 0x02,
+    ITEM_MEGA_BONUS    = 0x04,
+    POOR_FISH          = 0x08,
+    GOLD_ARROW_BONUS   = 0x10,
+    GOLDFISH_SCOOPING  = 0x20,
+    SHELLFISH_AFFINITY = 0x40
+}
+
+FISHFLAG =
+{
+    NORMAL    = 0x00,
+    SHELLFISH = 0x01
+}
+
 CONTAINERS =
 {
     INVENTORY = 0,
@@ -157,6 +175,8 @@ return {
 	FISHINGCATCHTYPE = FISHINGCATCHTYPE,
 	FISHINGGEAR      = FISHINGGEAR,
 	FISHINGROD       = FISHINGROD,
+    BAITFLAG         = BAITFLAG,
+    FISHFLAG         = FISHFLAG,
     CONTAINERS       = CONTAINERS,
     EQUIPMENTSLOTS   = EQUIPMENTSLOTS,
     WEEKDAY          = WEEKDAY,
