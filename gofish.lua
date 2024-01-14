@@ -106,7 +106,8 @@ fisherman =
     skill_mod = 0,
     equip_changed = false,
     zoning        = false,
-    in_city       = false
+    in_city       = false,
+    loaded        = false
 }
 
 gui_variables =
@@ -1140,7 +1141,7 @@ function FishingCheck(fishingSkill, rod, bait, area)
     end
 
     -- Normally this loop would select the hooked fish from the fish pool and apply the LU_SHANG/EBISU bonus based on
-    -- that fish. Instead this loop adds a scaled bonus for each fish proportional to its hook chance.
+    -- that fish. Instead this loop calculates the added pool weight for each fish
     if table_count(FishHookPool) > 0 then
         if fisherman.rodID == FISHINGROD.LU_SHANG or fisherman.rodID == FISHINGROD.EBISU then
             for _, entry in pairs(FishHookPool) do
@@ -1158,6 +1159,8 @@ function FishingCheck(fishingSkill, rod, bait, area)
                     local addWeight = initialBonus + math.floor((skilldiff * skillmultiplier) / (fish["size_type"] + 1));
                     -- Tack on the additional weight to the entry in FishHookPool
                     entry["addWeight"] = addWeight;
+                else
+                    entry["addWeight"] = 0;
                 end
             end
         end
@@ -1193,12 +1196,12 @@ function FishingCheck(fishingSkill, rod, bait, area)
     local mobChance   = 0;
     local noChance    = 0;
         
-    -- Check if the equipped rod adjusts the pool weights
+    -- Check if the equipped rod needs to adjust the pool weights
     if fisherman.rodID == FISHINGROD.LU_SHANG or fisherman.rodID == FISHINGROD.EBISU then
         if table_count(FishHookPool) > 0 then
             for _, entry in pairs(FishHookPool) do
                 local chance = entry["chance"] / FishHookChanceTotal;
-                entry["chance_adj"] = chance * ( FishPoolWeight + entry["addWeight"] ) / ( totalWeight + entry["addWeight"] ) * 100;
+                entry["chance_adj"] = chance * ( FishPoolWeight + entry["addWeight"] ) / ( totalWeight + entry["addWeight"] );
                 fishChance = fishChance + entry["chance_adj"];
                 itemChance = itemChance + chance * ( ItemPoolWeight ) / ( totalWeight + entry["addWeight"] );
                 mobChance  = mobChance  + chance * ( MobPoolWeight )  / ( totalWeight + entry["addWeight"] );
@@ -1210,9 +1213,10 @@ function FishingCheck(fishingSkill, rod, bait, area)
             mobChance  = MobPoolWeight  / totalWeight;
             noChance   = NoCatchWeight  / totalWeight;
         end
+    -- Or do simple calculations if the rod is boring
     else
         for _, entry in pairs(FishHookPool) do
-            entry["chance_adj"] = entry["chance"] / FishHookChanceTotal * FishPoolWeight / totalWeight * 100;
+            entry["chance_adj"] = (entry["chance"] / FishHookChanceTotal) * (FishPoolWeight / totalWeight);
         end
         fishChance = FishPoolWeight / totalWeight;
         itemChance = ItemPoolWeight / totalWeight;
@@ -1229,7 +1233,7 @@ function FishingCheck(fishingSkill, rod, bait, area)
     local chance, fish_name, pool_size, restock_rate, chance_lose, chance_snap, chance_break, chance_up;
     gui_variables.fishChances = { };
     for _, entry in pairs(FishHookPool) do
-        chance       = entry["chance_adj"];
+        chance       = entry["chance_adj"] * 100;
         fish_name    = entry["fish"].name;
         pool_size    = entry["group"].pool_size;
         restock_rate = entry["group"].restock_rate;
@@ -1281,6 +1285,16 @@ end);
 -- desc: Event called when the client is receiving a packet from the server.
 ----------------------------------------------------------------------------------------------------
 ashita.events.register('packet_in', 'gofish_in_packet', function(e)
+    -- Code to handle if addon was auto-loaded
+    if not fisherman.loaded and e.id == EVENTS.ZONEIN_IN then
+        fisherman.loaded = true;
+        fisherman.zoning = true;
+    end
+    -- Code to handle if addon was loaded manually
+    if not fisherman.loaded and e.id == EVENTS.GAMETICK_IN then
+        fisherman.loaded = true;
+    end
+    -- Handle events
     if e.id == EVENTS.ZONEOUT_IN then -- zoning out
         fisherman.zoning = true;
     elseif (e.id == EVENTS.ZONEDONE_IN and fisherman.zoning) then -- Equipment ready after zoning
@@ -1329,8 +1343,16 @@ ashita.events.register("d3d_present", "present_cb", function()
     --local posX = ashitaEntity:GetLocalPositionX(index);
     --local posY = ashitaEntity:GetLocalPositionZ(index); -- swapped with Z
     --local posZ = ashitaEntity:GetLocalPositionY(index); -- swapped with Y
-
-    if not fisherman.zoning then
+    
+    imgui.PushStyleColor(ImGuiCol_WindowBg,         { 0.10, 0.10, 0.10, 0.9 });
+    imgui.PushStyleColor(ImGuiCol_TitleBg,          { 0.00, 0.28, 0.67, 1.0 });
+    imgui.PushStyleColor(ImGuiCol_TitleBgActive,    { 0.00, 0.28, 0.67, 1.0 });
+    imgui.PushStyleColor(ImGuiCol_TitleBgCollapsed, { 0.00, 0.28, 0.67, 0.5 });
+    imgui.PushStyleColor(ImGuiCol_ButtonHovered,    { 0.00, 0.14, 0.33, 1.0 });
+    imgui.PushStyleColor(ImGuiCol_HeaderHovered,    { 0.00, 0.14, 0.33, 1.0 });
+    imgui.PushStyleColor(ImGuiCol_Text,             { 0.85, 0.85, 0.85, 1.0 });
+    
+    if fisherman.loaded and not fisherman.zoning then
         if imgui.Begin("GoFishMainWindow", true) then
             imgui.Text(string.format("Skill: %d(%d)", fisherman.skill_raw, fisherman.skill_mod));
             imgui.Text(string.format("Zone: %s(%d)", fisherman.zone["name"], GetCurrentZoneId()));
@@ -1393,5 +1415,12 @@ ashita.events.register("d3d_present", "present_cb", function()
             --imgui.Text(string.format("x:%.2f y:%.2f z:%.2f", posX, posY, posZ));
             imgui.End();
         end
+    imgui.PopStyleColor();
+    imgui.PopStyleColor();
+    imgui.PopStyleColor();
+    imgui.PopStyleColor();
+    imgui.PopStyleColor();
+    imgui.PopStyleColor();
+    imgui.PopStyleColor();
     end
 end);
