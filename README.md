@@ -8,6 +8,7 @@ An Ashita v4 addon to simulate the LandSandBoat ([LSB]) implementation of FFXI f
 - Calculates the Vana'diel month, hour, and moon phase for adjusting catch chances
 - Calculates the chances that a fish will provide a skillup
 - Adjusts catch chances based on weather
+- Results displayed in a configurable table (/gofish config)
 ### How it works
 The script updates whenever the player... 
 - Starts fishing

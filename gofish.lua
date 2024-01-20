@@ -39,21 +39,26 @@ require 'enums';
 
 -- Ashita
 require 'common';
-local imgui = require('imgui');
+local imgui     = require('imgui');
+local settings  = require('settings');
 
 ---------------------------------------------------------------------------------------------------
--- desc: Default Status configuration table.
+-- desc: Default ImGui Window Settings
 ---------------------------------------------------------------------------------------------------
 local default_config =
 {
     window =
     {
         position   = {  40,  40 },
-        dimensions = { 400, 400 },
-        visible    = true
+        dimensions = { 420, 320 }
+    },
+    
+    config_window =
+    {
+        position   = {  40,  40 },
+        dimensions = { 264, 206 }
     }
 };
-local configs = default_config;
 
 ----------------------------------------------------------------------------------------------------
 -- Variables
@@ -67,6 +72,19 @@ local ashitaEntity    = ashitaDataManager:GetEntity();
 
 local vanatimePtr = ashita.memory.find('FFXiMain.dll', 0, 'B0015EC390518B4C24088D4424005068', 0x34, 0);
 local weatherPtr  = ashita.memory.find('FFXiMain.dll', 0, '66A1????????663D????72', 0x02, 0);
+
+local gSettings = nil;
+local default_settings = T{
+    showColumns = T{
+        Pool  = T{false,},
+        Rate  = T{false,},
+        Lose  = T{true,},
+        Snap  = T{true,},
+        Break = T{true,},
+        Up    = T{false,}
+    },
+    showConfig = T{false,}
+};
 
 ----------------------------------------------------------------------------------------------------
 -- State Variables
@@ -577,7 +595,7 @@ end
 ----------------------------------------------------------------------------------------------------
 -- func: isBaitValid
 -- desc: Make sure there is an entry for the given fishID and baitID in the fishing_bait_affinity db
---  ret: Numerical value of groupid
+--  ret: True or False
 ----------------------------------------------------------------------------------------------------
 function isBaitValid(fishID, baitID)
     return exists_by_2(fishing_bait_affinity, test_by_2, "fishid", "baitid", fishID, baitID);
@@ -590,6 +608,15 @@ end
 ----------------------------------------------------------------------------------------------------
 function GetBaitPower(fishID, baitID)
     return find_by_2(fishing_bait_affinity, test_by_2, "fishid", "baitid", fishID, baitID)["power"];
+end
+
+----------------------------------------------------------------------------------------------------
+-- func: isKeyItemReq
+-- desc: Check if the given fish requires a key item to hook
+--  ret: True or False
+----------------------------------------------------------------------------------------------------
+function isKeyItemReq(fish)
+    return fish["required_keyitem"] > 0;
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -859,7 +886,7 @@ end
 ----------------------------------------------------------------------------------------------------
 -- func: CalculateBreakChance
 -- desc: Calculate the chance that a given fish will break the currently equipped rod
---  ret: Precentage chance to break rod
+--  ret: Percent chance to break rod
 ----------------------------------------------------------------------------------------------------
 function CalculateBreakChance(fish)
     local levelDiffBonus = 0;
@@ -895,7 +922,7 @@ end
 ----------------------------------------------------------------------------------------------------
 -- func: CalculateSnapChance
 -- desc: Calculate the chance that a given fish will snap the line of the currently equipped rod
---  ret: Precentage chance to snap line
+--  ret: Percent chance to snap line
 ----------------------------------------------------------------------------------------------------
 function CalculateSnapChance(fish)
     local levelDiffBonus  = 0;
@@ -930,7 +957,7 @@ end
 ----------------------------------------------------------------------------------------------------
 -- func: CalculateLoseChance
 -- desc: Calculate the chance that a given fish be lost due to skill (and other variables)
---  ret: Precentage chance to lose catch
+--  ret: Percent chance to lose catch
 ----------------------------------------------------------------------------------------------------
 function CalculateLoseChance(fish)
     local tooBigChance   = 0;
@@ -1089,10 +1116,12 @@ function FishingCheck(fishingSkill, rod, bait, area)
     local hookChance;
     local maxChance = 0;
     for _, v in pairs(FishPool) do
-        if fishingSkill >= v["fish_entry"]["skill_level"] or v["fish_entry"]["skill_level"] - fishingSkill <= 100 then
+        local fish = v["fish_entry"];
+        if (fishingSkill >= fish["skill_level"] or fish["skill_level"] - fishingSkill <= 100) and 
+         (not isKeyItemReq(fish) or ashitaPlayer:HasKeyItem(fish["required_keyitem"])) then
             hookChance = CalculateHookChance(fishingSkill, v, bait, rod);
             -- Attach the calculated hook chance to the fetched entries
-            table.insert(FishHookPool, {chance = hookChance, fish = v["fish_entry"], group = v["group_entry"]});
+            table.insert(FishHookPool, {chance = hookChance, fish = fish, group = v["group_entry"]});
             FishHookChanceTotal = FishHookChanceTotal + hookChance;
             if hookChance > maxChance then
                 maxChance = hookChance;
@@ -1265,7 +1294,17 @@ end
 -- desc: Event called when the addon is being loaded.
 ----------------------------------------------------------------------------------------------------
 ashita.events.register("load", "load_cb", function ()
+    gSettings = settings.load(default_settings);
+    
     Update();
+end);
+
+----------------------------------------------------------------------------------------------------s
+-- func: unload
+-- desc: Event called when the addon is being unloaded.
+----------------------------------------------------------------------------------------------------
+ashita.events.register("unload", "unload_cb", function ()
+    settings.save();
 end);
 
 ----------------------------------------------------------------------------------------------------
@@ -1327,8 +1366,22 @@ ashita.events.register('command', 'gofish_command', function(e)
     if #args > 1 then
         if string.lower(args[2]) == "update" then
             Update();
+        elseif string.lower(args[2]) == "config" then
+            gSettings.showConfig[1] = true;
         end
     end
+end);
+
+----------------------------------------------------------------------------------------------------
+-- func: settings
+-- desc: Registers a callback for the settings to monitor for character switches.
+----------------------------------------------------------------------------------------------------
+settings.register('settings', 'settings_update', function(s)
+    if (s ~= nil) then
+        gSettings = s;
+    end
+    
+    settings.save();
 end);
 
 ----------------------------------------------------------------------------------------------------
@@ -1336,28 +1389,36 @@ end);
 -- desc: Hook up to the Ashita render tick
 ----------------------------------------------------------------------------------------------------
 ashita.events.register("d3d_present", "present_cb", function()
-    imgui.SetNextWindowSize(default_config.window.dimensions, ImGuiCond_FirstUseEver);
-    imgui.SetNextWindowPos(default_config.window.position, ImGuiCond_FirstUseEver);
-
     --index = ashitaParty:GetMemberTargetIndex(0);
     --local posX = ashitaEntity:GetLocalPositionX(index);
     --local posY = ashitaEntity:GetLocalPositionZ(index); -- swapped with Z
     --local posZ = ashitaEntity:GetLocalPositionY(index); -- swapped with Y
     
-    imgui.PushStyleColor(ImGuiCol_WindowBg,         { 0.10, 0.10, 0.10, 0.9 });
-    imgui.PushStyleColor(ImGuiCol_TitleBg,          { 0.00, 0.28, 0.67, 1.0 });
-    imgui.PushStyleColor(ImGuiCol_TitleBgActive,    { 0.00, 0.28, 0.67, 1.0 });
-    imgui.PushStyleColor(ImGuiCol_TitleBgCollapsed, { 0.00, 0.28, 0.67, 0.5 });
-    imgui.PushStyleColor(ImGuiCol_ButtonHovered,    { 0.00, 0.14, 0.33, 1.0 });
-    imgui.PushStyleColor(ImGuiCol_HeaderHovered,    { 0.00, 0.14, 0.33, 1.0 });
-    imgui.PushStyleColor(ImGuiCol_Text,             { 0.85, 0.85, 0.85, 1.0 });
+    local addonStyle =
+    {
+        [ImGuiCol_Text]             = { 0.85, 0.85, 0.85, 1.0 },
+        [ImGuiCol_WindowBg]         = { 0.10, 0.10, 0.10, 0.9 },
+        [ImGuiCol_TitleBg]          = { 0.00, 0.28, 0.67, 1.0 },
+        [ImGuiCol_TitleBgActive]    = { 0.00, 0.28, 0.67, 1.0 },
+        [ImGuiCol_TitleBgCollapsed] = { 0.00, 0.28, 0.67, 0.5 },
+        [ImGuiCol_ButtonHovered]    = { 0.00, 0.14, 0.33, 1.0 },
+        [ImGuiCol_HeaderHovered]    = { 0.00, 0.14, 0.33, 1.0 }
+    }
+    
+    -- Push all the Imgui Style Color data onto the stack
+    for k, v in pairs(addonStyle) do
+        imgui.PushStyleColor(k, v);
+    end
     
     if fisherman.loaded and not fisherman.zoning then
-        if imgui.Begin("GoFishMainWindow", true) then
+        -- Draw Main Go Fish ImGui Window
+        imgui.SetNextWindowSize(default_config.window.dimensions, ImGuiCond_FirstUseEver);
+        imgui.SetNextWindowPos(default_config.window.position, ImGuiCond_FirstUseEver);
+        if imgui.Begin("Go Fish", true) then
             imgui.Text(string.format("Skill: %d(%d)", fisherman.skill_raw, fisherman.skill_mod));
-            imgui.Text(string.format("Zone: %s(%d)", fisherman.zone["name"], GetCurrentZoneId()));
+            imgui.Text(string.format("Zone: %s", fisherman.zone["name"]:gsub("_"," ")));
             if fisherman.valid_area then
-                imgui.Text(string.format("Area: %s(%d)", fisherman.area["name"], fisherman.area["areaid"]));
+                imgui.Text(string.format("Area: %s", fisherman.area["name"]:gsub("_"," ")));
             else
                 imgui.Text("Area: None");
             end
@@ -1372,12 +1433,22 @@ ashita.events.register("d3d_present", "present_cb", function()
                 imgui.Text("Bait: None");
             end
             if fisherman.valid_area and fisherman.valid_rod and fisherman.valid_bait then
-                if imgui.BeginTable("resultTable", 5) then
+                -- Count the table columns that have been enabled, including the 2 static columns
+                local column_count = 2;
+                for _, v in pairs(gSettings.showColumns) do
+                    if v[1] == true then column_count = column_count + 1; end
+                end
+                -- Draw the calculation results table
+                if imgui.BeginTable("resultTable", column_count) then
+                    local c_width = 0.6 / (column_count - 1);
                     imgui.TableSetupColumn("Name", 16, 0.4);
-                    imgui.TableSetupColumn("Hook", 16, 0.15);
-                    imgui.TableSetupColumn("Lose", 16, 0.15);
-                    imgui.TableSetupColumn("Snap", 16, 0.15);
-                    imgui.TableSetupColumn("Break", 16, 0.15);
+                    imgui.TableSetupColumn("Hook", 16, c_width);
+                    if gSettings.showColumns.Up[1]    then imgui.TableSetupColumn("Up", 16, c_width); end
+                    if gSettings.showColumns.Lose[1]  then imgui.TableSetupColumn("Lose", 16, c_width); end
+                    if gSettings.showColumns.Snap[1]  then imgui.TableSetupColumn("Snap", 16, c_width); end
+                    if gSettings.showColumns.Break[1] then imgui.TableSetupColumn("Break", 16, c_width); end
+                    if gSettings.showColumns.Pool[1]  then imgui.TableSetupColumn("Pool", 16, c_width); end
+                    if gSettings.showColumns.Rate[1]  then imgui.TableSetupColumn("Rate", 16, c_width); end
                     imgui.TableHeadersRow();
                     for _, entry in pairs(gui_variables.fishChances) do
                         imgui.TableNextRow();
@@ -1385,12 +1456,30 @@ ashita.events.register("d3d_present", "present_cb", function()
                         imgui.Text(string.format("%s", entry[2]));
                         imgui.TableSetColumnIndex(1);
                         imgui.Text(string.format("%.1f", entry[1]));
-                        imgui.TableSetColumnIndex(2);
-                        imgui.Text(string.format("%.1f", entry[5]));
-                        imgui.TableSetColumnIndex(3);
-                        imgui.Text(string.format("%.1f", entry[6]));
-                        imgui.TableSetColumnIndex(4);
-                        imgui.Text(string.format("%.1f", entry[7]));
+                        if gSettings.showColumns.Up[1] then
+                            imgui.TableNextColumn();
+                            imgui.Text(string.format("%.1f", entry[8]));
+                        end
+                        if gSettings.showColumns.Lose[1] then
+                            imgui.TableNextColumn();
+                            imgui.Text(string.format("%.1f", entry[5]));
+                        end
+                        if gSettings.showColumns.Snap[1] then
+                            imgui.TableNextColumn();
+                            imgui.Text(string.format("%.1f", entry[6]));
+                        end
+                        if gSettings.showColumns.Break[1] then
+                            imgui.TableNextColumn();
+                            imgui.Text(string.format("%.1f", entry[7]));
+                        end
+                        if gSettings.showColumns.Pool[1] then
+                            imgui.TableNextColumn();
+                            imgui.Text(string.format("%d", entry[3]));
+                        end
+                        if gSettings.showColumns.Rate[1] then
+                            imgui.TableNextColumn();
+                            imgui.Text(string.format("%d", entry[4]));
+                        end
                     end
                     imgui.TableNextRow();
                     imgui.TableSetColumnIndex(0);
@@ -1414,13 +1503,30 @@ ashita.events.register("d3d_present", "present_cb", function()
             --imgui.Text(string.format("h:%d p:%d m:%d", astrology.hour, astrology.phase, astrology.month));
             --imgui.Text(string.format("x:%.2f y:%.2f z:%.2f", posX, posY, posZ));
             imgui.End();
+        else
+            imgui.End();
         end
-    imgui.PopStyleColor();
-    imgui.PopStyleColor();
-    imgui.PopStyleColor();
-    imgui.PopStyleColor();
-    imgui.PopStyleColor();
-    imgui.PopStyleColor();
-    imgui.PopStyleColor();
+        
+        -- Conditionally draw Go Fish Config ImGui Window
+        if gSettings.showConfig[1] then
+            imgui.SetNextWindowSize(default_config.config_window.dimensions, ImGuiCond_FirstUseEver);
+            imgui.SetNextWindowPos(default_config.config_window.position, ImGuiCond_FirstUseEver);
+            if imgui.Begin("Go Fish Config", gSettings.showConfig) then  
+                imgui.Checkbox("Show Skillup Chance", gSettings.showColumns.Up);
+                imgui.Checkbox("Show Catch Lose Chance", gSettings.showColumns.Lose);
+                imgui.Checkbox("Show Line Snap Chance", gSettings.showColumns.Snap);
+                imgui.Checkbox("Show Rod Break Chance", gSettings.showColumns.Break);
+                imgui.Checkbox("Show Pool Size", gSettings.showColumns.Pool);
+                imgui.Checkbox("Show Restock Rate", gSettings.showColumns.Rate); 
+                imgui.End();
+            else
+                imgui.End();
+            end
+        end
+    end
+    
+    -- Pop all the Imgui Style Color data off the stack
+    for _, _ in pairs(addonStyle) do
+        imgui.PopStyleColor();
     end
 end);
