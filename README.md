@@ -20,7 +20,6 @@ The script updates whenever the player...
 - Calculate the chances that a golden arrow will appear during minigame
 - Moghancement adjustments (if LSB implements them and client has access)
 - Allow user to adjust font scaling
-- Allow user to choose which columns to display in catch table
 ### Things it will not do
 - Automate anything
 - Determine if the fish pool is empty (client likely does not have access)

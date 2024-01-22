@@ -847,6 +847,10 @@ fishing_bait_affinity = {
     { baitid=17007, fishid=5129, power=2 },
     { baitid=16996, fishid=4482, power=2 },
     { baitid=17396, fishid=4289, power=2 },
+    { baitid=16994, fishid=5817, power=3 }, -- Tiger Shark added for CE
+    { baitid=17394, fishid=5817, power=2 }, -- Tiger Shark added for CE
+    { baitid=17407, fishid=5817, power=2 }, -- Tiger Shark added for CE
+    { baitid=17400, fishid=5817, power=2 }, -- Tiger Shark added for CE
 };
 fishing_catch = {
     { zoneid=1, areaid=1, groupid=139 },
@@ -1143,6 +1147,7 @@ fishing_fish = {
     { fishid=5474, name='Ca Cuong', skill_level=78, difficulty=17, base_delay=12, base_move=6, min_length=1, max_length=1, ranking=99, size_type=0, water_type=0, log=255, quest=255, quest_status=0, flags=0, hour_pattern=0, moon_pattern=0, month_pattern=0, legendary=0, legendary_flags=0, item=0, max_hook=1, rarity=500, required_keyitem=0, required_catches=nil, family=0, quest_only=0, contest=0, disabled=0 },
     { fishid=5475, name='Gigant Octopus', skill_level=80, difficulty=18, base_delay=6, base_move=9, min_length=65, max_length=170, ranking=99, size_type=1, water_type=0, log=255, quest=255, quest_status=0, flags=0, hour_pattern=0, moon_pattern=0, month_pattern=0, legendary=0, legendary_flags=0, item=0, max_hook=1, rarity=1000, required_keyitem=0, required_catches=nil, family=0, quest_only=0, contest=0, disabled=0 },
     { fishid=5476, name='Abaia', skill_level=150, difficulty=37, base_delay=7, base_move=13, min_length=269, max_length=317, ranking=34, size_type=1, water_type=0, log=255, quest=255, quest_status=0, flags=0, hour_pattern=0, moon_pattern=0, month_pattern=0, legendary=1, legendary_flags=0, item=0, max_hook=1, rarity=500, required_keyitem=0, required_catches=nil, family=0, quest_only=0, contest=0, disabled=1 },
+    { fishid=5817, name='Tiger Shark', skill_level=99, difficulty=35, base_delay=3, base_move=9, min_length=1, max_length=1, ranking=14, size_type=0, water_type=0, log=255, quest=255, quest_status=0, flags=0, hour_pattern=3, moon_pattern=1, month_pattern=0, legendary=0, legendary_flags=0, item=0, max_hook=1, rarity=500, required_keyitem=1979, required_catches=nil, family=0, quest_only=0, contest=0, disabled=1 }, -- Tiger Shark added for CE
     { fishid=12316, name='Fish Scale Shield', skill_level=7, difficulty=15, base_delay=13, base_move=2, min_length=1, max_length=1, ranking=13, size_type=0, water_type=0, log=255, quest=255, quest_status=0, flags=0, hour_pattern=0, moon_pattern=0, month_pattern=0, legendary=0, legendary_flags=0, item=1, max_hook=1, rarity=500, required_keyitem=0, required_catches=nil, family=0, quest_only=0, contest=0, disabled=0 },
     { fishid=12522, name='Rusty Cap', skill_level=30, difficulty=38, base_delay=13, base_move=2, min_length=1, max_length=1, ranking=5, size_type=0, water_type=0, log=255, quest=255, quest_status=0, flags=9, hour_pattern=7, moon_pattern=1, month_pattern=0, legendary=0, legendary_flags=0, item=1, max_hook=1, rarity=800, required_keyitem=0, required_catches=nil, family=0, quest_only=0, contest=0, disabled=0 },
     { fishid=13454, name='Copper ring', skill_level=24, difficulty=40, base_delay=13, base_move=2, min_length=1, max_length=1, ranking=5, size_type=0, water_type=0, log=255, quest=255, quest_status=0, flags=1, hour_pattern=0, moon_pattern=0, month_pattern=0, legendary=0, legendary_flags=0, item=1, max_hook=1, rarity=800, required_keyitem=0, required_catches=nil, family=0, quest_only=0, contest=0, disabled=0 },
@@ -2190,6 +2195,7 @@ fishing_group = {
     { groupid=136, fishid=4485, rarity=700, pool_size=260, restock_rate=5 },
     { groupid=136, fishid=4514, rarity=1000, pool_size=500, restock_rate=15 },
     { groupid=136, fishid=5128, rarity=850, pool_size=290, restock_rate=7 },
+    { groupid=136, fishid=5817, rarity=700, pool_size=50, restock_rate=6 }, -- Tiger Shark added for CE
     { groupid=136, fishid=14242, rarity=500, pool_size=300, restock_rate=9 },
     { groupid=137, fishid=4305, rarity=700, pool_size=50, restock_rate=6 },
     { groupid=137, fishid=4360, rarity=1000, pool_size=500, restock_rate=15 },
