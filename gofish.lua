@@ -56,7 +56,13 @@ local default_config =
     config_window =
     {
         position   = {  40,  40 },
-        dimensions = { 264, 206 }
+        dimensions = { 264, 240 }
+    },
+    
+    eula_window =
+    {
+        position   = { 100, 100 },
+        dimensions = { 640, 240 }
     }
 };
 
@@ -83,8 +89,21 @@ local default_settings = T{
         Break = T{true,},
         Up    = T{false,}
     },
-    showConfig = T{false,}
+    showConfig = T{false,},
+    hideEula   = T{false,},
+    skillupmul = 1
 };
+
+local eula_literal =
+[[This addon statistically determines the approximate results of
+LandSandBoat-based private servers' implementation of retail FFXI
+fishing. In other words, it is an approximation of a simulation.
+This addon does not get any of the actual calculation results from
+the server itself. Therefore it is only 'accurate' as long as the
+server implementation does not change. Any deviations are the fault
+of the addon and NOT the server. By using this addon, the user agrees
+to accept the results as approximations and only submit bug reports
+to StrixNivea on GitHub and not server administrators.]];
 
 ----------------------------------------------------------------------------------------------------
 -- State Variables
@@ -1258,7 +1277,12 @@ function FishingCheck(fishingSkill, rod, bait, area)
     gui_variables.itemChance = itemChance * 100;
     gui_variables.mobChance  = mobChance  * 100;
     gui_variables.noChance   = noChance   * 100;
-
+    
+    -- Make sure user input for multiplier is a number
+    local skillupmul = tonumber(gSettings.skillupmul[1])
+    if not skillupmul then skillupmul = 1; end
+        
+    -- Loop through FishHookPool and fill out variables for GUI
     local chance, fish_name, pool_size, restock_rate, chance_lose, chance_snap, chance_break, chance_up;
     gui_variables.fishChances = { };
     for _, entry in pairs(FishHookPool) do
@@ -1269,7 +1293,7 @@ function FishingCheck(fishingSkill, rod, bait, area)
         chance_lose  = CalculateLoseChance(entry.fish);
         chance_snap  = CalculateSnapChance(entry.fish);
         chance_break = CalculateBreakChance(entry.fish);
-        chance_up    = FishingSkillup(entry.fish)
+        chance_up    = FishingSkillup(entry.fish) * skillupmul;
         table.insert(gui_variables.fishChances,
             { chance, fish_name, pool_size, restock_rate, chance_lose, chance_snap, chance_break, chance_up }
         );
@@ -1294,6 +1318,7 @@ end
 -- desc: Event called when the addon is being loaded.
 ----------------------------------------------------------------------------------------------------
 ashita.events.register("load", "load_cb", function ()
+    -- Load saved settings else default
     gSettings = settings.load(default_settings);
     
     Update();
@@ -1517,7 +1542,25 @@ ashita.events.register("d3d_present", "present_cb", function()
                 imgui.Checkbox("Show Line Snap Chance", gSettings.showColumns.Snap);
                 imgui.Checkbox("Show Rod Break Chance", gSettings.showColumns.Break);
                 imgui.Checkbox("Show Pool Size", gSettings.showColumns.Pool);
-                imgui.Checkbox("Show Restock Rate", gSettings.showColumns.Rate); 
+                imgui.Checkbox("Show Restock Rate", gSettings.showColumns.Rate);
+                imgui.PushItemWidth(36);
+                imgui.InputText("##multi", gSettings.skillupmul, 4, ImGuiInputTextFlags_CharsDecimal);
+                imgui.PopItemWidth()
+                imgui.SameLine();
+                imgui.Text("Skillup Chance Multi");
+                imgui.End();
+            else
+                imgui.End();
+            end
+        end
+        
+        -- Conditionally draw Go Fish Config ImGui Window
+        if not gSettings.hideEula[1] then
+            imgui.SetNextWindowSize(default_config.eula_window.dimensions, ImGuiCond_FirstUseEver);
+            imgui.SetNextWindowPos(default_config.eula_window.position, ImGuiCond_FirstUseEver);
+            if imgui.Begin("Go Fish EULA", gSettings.showConfig) then  
+                imgui.Text(eula_literal);
+                imgui.Checkbox("Do not show again", gSettings.hideEula); 
                 imgui.End();
             else
                 imgui.End();
