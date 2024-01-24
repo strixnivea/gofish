@@ -91,7 +91,7 @@ local default_settings = T{
     },
     showConfig = T{false,},
     hideEula   = T{false,},
-    skillupmul = 1
+    skillupmul = T{"3",},
 };
 
 local eula_literal =
@@ -1321,6 +1321,11 @@ ashita.events.register("load", "load_cb", function ()
     -- Load saved settings else default
     gSettings = settings.load(default_settings);
     
+    -- Player must have loaded the addon manually, so set loaded flag
+    if ashitaInventory:GetContainerUpdateFlags() > 0 then
+        fisherman.loaded = true;
+    end
+    
     Update();
 end);
 
@@ -1353,10 +1358,6 @@ ashita.events.register('packet_in', 'gofish_in_packet', function(e)
     if not fisherman.loaded and e.id == EVENTS.ZONEIN_IN then
         fisherman.loaded = true;
         fisherman.zoning = true;
-    end
-    -- Code to handle if addon was loaded manually
-    if not fisherman.loaded and e.id == EVENTS.GAMETICK_IN then
-        fisherman.loaded = true;
     end
     -- Handle events
     if e.id == EVENTS.ZONEOUT_IN then -- zoning out
