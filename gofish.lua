@@ -87,8 +87,9 @@ local default_settings = T{
         Lose  = T{true,},
         Snap  = T{true,},
         Break = T{true,},
-        Up    = T{false,}
+        Up    = T{true,}
     },
+    showMain   = T{true,},
     showConfig = T{false,},
     hideEula   = T{false,},
     skillupmul = T{"3",},
@@ -1379,6 +1380,7 @@ ashita.events.register('command', 'gofish_command', function(e)
     local args = e.command:args();
     if #args == 0 then return; end
 
+    -- Check if root command is /gofish or /gf
     local valid_command = false;
     args[1] = string.lower(args[1]);
     for _, entry in pairs(addon.commands) do
@@ -1389,10 +1391,22 @@ ashita.events.register('command', 'gofish_command', function(e)
     end
     if valid_command == false then return; end
 
+    -- If no additional arguments, show the Main window
+    if #args == 1 then
+        gSettings.showMain[1] = true
+    end
+
+    -- If argument provided, parse it
     if #args > 1 then
-        if string.lower(args[2]) == "update" then
+        local l_arg_2 = string.lower(args[2]);
+        if l_arg_2 == "update" then
             Update();
-        elseif string.lower(args[2]) == "config" then
+        elseif l_arg_2 == "config" then
+            gSettings.showConfig[1] = true;
+        elseif l_arg_2 == "main" then
+            gSettings.showMain[1] = true;
+        elseif l_arg_2 == "show" then
+            gSettings.showMain[1] = true;
             gSettings.showConfig[1] = true;
         end
     end
@@ -1437,100 +1451,102 @@ ashita.events.register("d3d_present", "present_cb", function()
     end
     
     if fisherman.loaded and not fisherman.zoning then
-        -- Draw Main Go Fish ImGui Window
-        imgui.SetNextWindowSize(default_config.window.dimensions, ImGuiCond_FirstUseEver);
-        imgui.SetNextWindowPos(default_config.window.position, ImGuiCond_FirstUseEver);
-        if imgui.Begin("Go Fish", true) then
-            imgui.Text(string.format("Skill: %d(%d)", fisherman.skill_raw, fisherman.skill_mod));
-            imgui.Text(string.format("Zone: %s", fisherman.zone["name"]:gsub("_"," ")));
-            if fisherman.valid_area then
-                imgui.Text(string.format("Area: %s", fisherman.area["name"]:gsub("_"," ")));
-            else
-                imgui.Text("Area: None");
-            end
-            if fisherman.valid_rod then
-                imgui.Text(string.format("Rod:  %s", fisherman.rod["name"]));
-            else
-                imgui.Text("Rod:  None");
-            end
-            if fisherman.valid_bait then
-                imgui.Text(string.format("Bait: %s", fisherman.bait["name"]));
-            else
-                imgui.Text("Bait: None");
-            end
-            if fisherman.valid_area and fisherman.valid_rod and fisherman.valid_bait then
-                -- Count the table columns that have been enabled, including the 2 static columns
-                local column_count = 2;
-                for _, v in pairs(gSettings.showColumns) do
-                    if v[1] == true then column_count = column_count + 1; end
+        if gSettings.showMain[1] then
+            -- Draw Main Go Fish ImGui Window
+            imgui.SetNextWindowSize(default_config.window.dimensions, ImGuiCond_FirstUseEver);
+            imgui.SetNextWindowPos(default_config.window.position, ImGuiCond_FirstUseEver);
+            if imgui.Begin("Go Fish", gSettings.showMain) then
+                imgui.Text(string.format("Skill: %d(%d)", fisherman.skill_raw, fisherman.skill_mod));
+                imgui.Text(string.format("Zone: %s", fisherman.zone["name"]:gsub("_"," ")));
+                if fisherman.valid_area then
+                    imgui.Text(string.format("Area: %s", fisherman.area["name"]:gsub("_"," ")));
+                else
+                    imgui.Text("Area: None");
                 end
-                -- Draw the calculation results table
-                if imgui.BeginTable("resultTable", column_count) then
-                    local c_width = 0.6 / (column_count - 1);
-                    imgui.TableSetupColumn("Name", 16, 0.4);
-                    imgui.TableSetupColumn("Hook", 16, c_width);
-                    if gSettings.showColumns.Up[1]    then imgui.TableSetupColumn("Up", 16, c_width); end
-                    if gSettings.showColumns.Lose[1]  then imgui.TableSetupColumn("Lose", 16, c_width); end
-                    if gSettings.showColumns.Snap[1]  then imgui.TableSetupColumn("Snap", 16, c_width); end
-                    if gSettings.showColumns.Break[1] then imgui.TableSetupColumn("Break", 16, c_width); end
-                    if gSettings.showColumns.Pool[1]  then imgui.TableSetupColumn("Pool", 16, c_width); end
-                    if gSettings.showColumns.Rate[1]  then imgui.TableSetupColumn("Rate", 16, c_width); end
-                    imgui.TableHeadersRow();
-                    for _, entry in pairs(gui_variables.fishChances) do
+                if fisherman.valid_rod then
+                    imgui.Text(string.format("Rod:  %s", fisherman.rod["name"]));
+                else
+                    imgui.Text("Rod:  None");
+                end
+                if fisherman.valid_bait then
+                    imgui.Text(string.format("Bait: %s", fisherman.bait["name"]));
+                else
+                    imgui.Text("Bait: None");
+                end
+                if fisherman.valid_area and fisherman.valid_rod and fisherman.valid_bait then
+                    -- Count the table columns that have been enabled, including the 2 static columns
+                    local column_count = 2;
+                    for _, v in pairs(gSettings.showColumns) do
+                        if v[1] == true then column_count = column_count + 1; end
+                    end
+                    -- Draw the calculation results table
+                    if imgui.BeginTable("resultTable", column_count) then
+                        local c_width = 0.6 / (column_count - 1);
+                        imgui.TableSetupColumn("Name", 16, 0.4);
+                        imgui.TableSetupColumn("Hook", 16, c_width);
+                        if gSettings.showColumns.Up[1]    then imgui.TableSetupColumn("Up", 16, c_width); end
+                        if gSettings.showColumns.Lose[1]  then imgui.TableSetupColumn("Lose", 16, c_width); end
+                        if gSettings.showColumns.Snap[1]  then imgui.TableSetupColumn("Snap", 16, c_width); end
+                        if gSettings.showColumns.Break[1] then imgui.TableSetupColumn("Break", 16, c_width); end
+                        if gSettings.showColumns.Pool[1]  then imgui.TableSetupColumn("Pool", 16, c_width); end
+                        if gSettings.showColumns.Rate[1]  then imgui.TableSetupColumn("Rate", 16, c_width); end
+                        imgui.TableHeadersRow();
+                        for _, entry in pairs(gui_variables.fishChances) do
+                            imgui.TableNextRow();
+                            imgui.TableSetColumnIndex(0);
+                            imgui.Text(string.format("%s", entry[2]));
+                            imgui.TableSetColumnIndex(1);
+                            imgui.Text(string.format("%.1f", entry[1]));
+                            if gSettings.showColumns.Up[1] then
+                                imgui.TableNextColumn();
+                                imgui.Text(string.format("%.1f", entry[8]));
+                            end
+                            if gSettings.showColumns.Lose[1] then
+                                imgui.TableNextColumn();
+                                imgui.Text(string.format("%.1f", entry[5]));
+                            end
+                            if gSettings.showColumns.Snap[1] then
+                                imgui.TableNextColumn();
+                                imgui.Text(string.format("%.1f", entry[6]));
+                            end
+                            if gSettings.showColumns.Break[1] then
+                                imgui.TableNextColumn();
+                                imgui.Text(string.format("%.1f", entry[7]));
+                            end
+                            if gSettings.showColumns.Pool[1] then
+                                imgui.TableNextColumn();
+                                imgui.Text(string.format("%d", entry[3]));
+                            end
+                            if gSettings.showColumns.Rate[1] then
+                                imgui.TableNextColumn();
+                                imgui.Text(string.format("%d", entry[4]));
+                            end
+                        end
                         imgui.TableNextRow();
                         imgui.TableSetColumnIndex(0);
-                        imgui.Text(string.format("%s", entry[2]));
+                        imgui.Text("Item");
                         imgui.TableSetColumnIndex(1);
-                        imgui.Text(string.format("%.1f", entry[1]));
-                        if gSettings.showColumns.Up[1] then
-                            imgui.TableNextColumn();
-                            imgui.Text(string.format("%.1f", entry[8]));
-                        end
-                        if gSettings.showColumns.Lose[1] then
-                            imgui.TableNextColumn();
-                            imgui.Text(string.format("%.1f", entry[5]));
-                        end
-                        if gSettings.showColumns.Snap[1] then
-                            imgui.TableNextColumn();
-                            imgui.Text(string.format("%.1f", entry[6]));
-                        end
-                        if gSettings.showColumns.Break[1] then
-                            imgui.TableNextColumn();
-                            imgui.Text(string.format("%.1f", entry[7]));
-                        end
-                        if gSettings.showColumns.Pool[1] then
-                            imgui.TableNextColumn();
-                            imgui.Text(string.format("%d", entry[3]));
-                        end
-                        if gSettings.showColumns.Rate[1] then
-                            imgui.TableNextColumn();
-                            imgui.Text(string.format("%d", entry[4]));
-                        end
-                    end
-                    imgui.TableNextRow();
-                    imgui.TableSetColumnIndex(0);
-                    imgui.Text("Item");
-                    imgui.TableSetColumnIndex(1);
-                    imgui.Text(string.format("%.1f", gui_variables.itemChance));
-                    imgui.TableNextRow();
-                    imgui.TableSetColumnIndex(0);
-                    imgui.Text("Mob");
-                    imgui.TableSetColumnIndex(1);
-                    imgui.Text(string.format("%.1f", gui_variables.mobChance));
-                    imgui.TableNextRow();
-                    imgui.TableSetColumnIndex(0);
-                    imgui.Text("No Catch");
-                    imgui.TableSetColumnIndex(1);
-                    imgui.Text(string.format("%.1f", gui_variables.noChance));
+                        imgui.Text(string.format("%.1f", gui_variables.itemChance));
+                        imgui.TableNextRow();
+                        imgui.TableSetColumnIndex(0);
+                        imgui.Text("Mob");
+                        imgui.TableSetColumnIndex(1);
+                        imgui.Text(string.format("%.1f", gui_variables.mobChance));
+                        imgui.TableNextRow();
+                        imgui.TableSetColumnIndex(0);
+                        imgui.Text("No Catch");
+                        imgui.TableSetColumnIndex(1);
+                        imgui.Text(string.format("%.1f", gui_variables.noChance));
 
-                    imgui.EndTable();
+                        imgui.EndTable();
+                    end
                 end
+                --imgui.Text(string.format("h:%d p:%d m:%d", astrology.hour, astrology.phase, astrology.month));
+                --imgui.Text(string.format("x:%.2f y:%.2f z:%.2f", posX, posY, posZ));
+                imgui.End();
+            else
+                imgui.End();
             end
-            --imgui.Text(string.format("h:%d p:%d m:%d", astrology.hour, astrology.phase, astrology.month));
-            --imgui.Text(string.format("x:%.2f y:%.2f z:%.2f", posX, posY, posZ));
-            imgui.End();
-        else
-            imgui.End();
         end
         
         -- Conditionally draw Go Fish Config ImGui Window
