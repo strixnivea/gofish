@@ -1072,7 +1072,7 @@ function CalculateHookChance(fishingSkill, fish, bait, rod)
     end
 
     -- Shellfish Affinity
-    if bit.band(fisherman.bait["flags"], BAITFLAG.SHELLFISH_AFFINITY) and bit.band(fish["fish_entry"]["flags"], FISHFLAG.SHELLFISH) then
+    if bit.band(fisherman.bait["flags"], BAITFLAG.SHELLFISH_AFFINITY) > 0 and bit.band(fish["fish_entry"]["flags"], FISHFLAG.SHELLFISH) > 0 then
         hookChance = hookChance + 50;
     end
 
@@ -1183,7 +1183,7 @@ function FishingCheck(fishingSkill, rod, bait, area)
     end
 
     -- Poor Fish Bait Flag Adjustment
-    if bit.band(fisherman.bait["flags"], BAITFLAG.POOR_FISH) and FishPoolWeight > 0 then
+    if bit.band(fisherman.bait["flags"], BAITFLAG.POOR_FISH) > 0 and FishPoolWeight > 0 then
         FishPoolWeight = FishPoolWeight - math.floor(FishPoolWeight * 0.25);
         ItemPoolWeight = FishPoolWeight + math.floor(FishPoolWeight * 0.10);
         NoCatchWeight  = NoCatchWeight  + math.floor(NoCatchWeight  * 0.25);
