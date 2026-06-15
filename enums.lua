@@ -156,16 +156,23 @@ WEEKDAY =
     DARKSDAY     = 7
 }
 
-EVENTS =
+EVENTS_IN =
 {
-    FISHING_OUT  = 0x01A,
-    ZONEIN_IN    = 0x00A,
-    ZONEOUT_IN   = 0x00B,
-    EQUIPCHG_OUT = 0x050,
-    EQUIPCHG_IN  = 0x051,
-    ZONEDONE_IN  = 0x112,
-    INVREADY_IN  = 0x01D,
-    GAMETICK_IN  = 0x017,
+    
+    ZONEIN   = 0x00A,
+    ZONEOUT  = 0x00B,
+    EQUIPCHG = 0x051,
+    ZONEDONE = 0x02A,
+    INVREADY = 0x01D,
+    GAMETICK = 0x017,
+    STATUS   = 0x037,
+    TRYNOW   = 0x071,
+}
+
+EVENTS_OUT =
+{
+    ACTION   = 0x01A,
+    EQUIPCHG = 0x050,
 }
 
 return {

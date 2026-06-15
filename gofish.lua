@@ -1343,9 +1343,12 @@ end);
 -- desc: Event called when the client is sending a packet to the server.
 ----------------------------------------------------------------------------------------------------
 ashita.events.register('packet_out', 'gofish_out_packet', function(e)
-    if e.id == EVENTS.FISHING_OUT and struct.unpack("H", e.data, 0x0A) == 0x0E04 then
-        Update();
-    elseif e.id == EVENTS.EQUIPCHG_OUT then
+    if e.id == EVENTS_OUT.ACTION then
+        local type_byte = struct.unpack("B", e.data, 0x0B);
+        if type_byte == 0x0E then -- Fishing
+            Update();
+        end
+    elseif e.id == EVENTS_OUT.EQUIPCHG then
         fisherman.equip_changed = true;
     end
 end);
@@ -1356,17 +1359,17 @@ end);
 ----------------------------------------------------------------------------------------------------
 ashita.events.register('packet_in', 'gofish_in_packet', function(e)
     -- Code to handle if addon was auto-loaded
-    if not fisherman.loaded and e.id == EVENTS.ZONEIN_IN then
+    if not fisherman.loaded and e.id == EVENTS_IN.ZONEIN then
         fisherman.loaded = true;
         fisherman.zoning = true;
     end
     -- Handle events
-    if e.id == EVENTS.ZONEOUT_IN then -- zoning out
+    if e.id == EVENTS_IN.ZONEOUT then -- zoning out
         fisherman.zoning = true;
-    elseif (e.id == EVENTS.ZONEDONE_IN and fisherman.zoning) then -- Equipment ready after zoning
+    elseif (e.id == EVENTS_IN.TRYNOW and fisherman.zoning) then -- Equipment ready after zoning
         Update();
         fisherman.zoning = false;
-    elseif (e.id == EVENTS.EQUIPCHG_IN and fisherman.equip_changed) then
+    elseif (e.id == EVENTS_IN.STATUS and fisherman.equip_changed) then
         Update();
         fisherman.equip_changed = false;
     end
